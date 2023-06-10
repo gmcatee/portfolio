@@ -18,7 +18,7 @@
     "href": "index.html#current-work",
     "title": "About",
     "section": "Current Work",
-    "text": "Current Work\n\nBusiness Intelligence Engineer, Snap! Finance\n\nMy focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that uses R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgre databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)"
+    "text": "Current Work\n\nBusiness Intelligence Engineer, Snap! Finance\n\nMy focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that use R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgre databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)"
   },
   {
     "objectID": "index.html#education",
@@ -32,6 +32,6 @@
     "href": "index.html#what-can-i-do-for-you",
     "title": "About",
     "section": "What can I do for you?",
-    "text": "What can I do for you?\nA question better suited for you, but I will list some things here:\n\nBuild interactive and compelling visuals (Highcharts, Plotly, GGPlot etc.)\nBuild interactive Dashboards in little time (RShiny, ZenDash, Tableau)\nAnalyze data and tell a story to help stakeholders understand the findings\nBuild and maintain ETL processes\n\nAirflow, Presto, PostgreSQL, Posit Connect (RStudio)\n\nExperiment analysis (A/B testing, stats)\nProphet model forecasting"
+    "text": "What can I do for you?\nA question better suited for you, but I will list some things here:\n\nBuild and maintain ETL processes\n\nAirflow, Presto, PostgreSQL, Posit Connect (RStudio)\n\nBuild interactive and compelling visuals\n\nHighcharts, Plotly, GGPlot etc.\n\nBuild interactive Dashboards in little time\n\nRShiny, Graveler, BS4, ZenDash, Tableau\n\nAnalyze data and tell a story to help stakeholders understand the findings\nExperiment analysis (A/B testing, stats)\nProphet model forecasting"
   }
 ]

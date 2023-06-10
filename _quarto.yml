@@ -11,4 +11,7 @@ website:
       - section: "Data Work"
         contents:
           - bring_current.qmd
-  
+
+format: 
+  html: 
+    css: styles.css
