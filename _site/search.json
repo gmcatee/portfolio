@@ -1,0 +1,37 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "About",
+    "section": "",
+    "text": "Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see https://quarto.org."
+  },
+  {
+    "objectID": "index.html#running-code",
+    "href": "index.html#running-code",
+    "title": "About",
+    "section": "Running Code",
+    "text": "Running Code\nWhen you click the Render button a document will be generated that includes both content and the output of embedded code. You can embed code like this:\n\n1 + 1\n\n[1] 2\n\n\nYou can add options to executable code like this\n\n\n[1] 4\n\n\nThe echo: false option disables the printing of code (only output is displayed)."
+  },
+  {
+    "objectID": "index.html#current-work",
+    "href": "index.html#current-work",
+    "title": "About",
+    "section": "Current Work",
+    "text": "Current Work\n\nBusiness Intelligence Engineer, Snap! Finance\n\nMy focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that uses R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgre databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)"
+  },
+  {
+    "objectID": "index.html#education",
+    "href": "index.html#education",
+    "title": "About",
+    "section": "Education",
+    "text": "Education\n\nUtah Valley University\n\nBS Information Systems, Business Intelligence 2016-2020"
+  },
+  {
+    "objectID": "index.html#what-can-i-do-for-you",
+    "href": "index.html#what-can-i-do-for-you",
+    "title": "About",
+    "section": "What can I do for you?",
+    "text": "What can I do for you?\nA question better suited for you, but I will list some things here:\n\nBuild interactive and compelling visuals (Highcharts, Plotly, GGPlot etc.)\nBuild interactive Dashboards in little time (RShiny, ZenDash, Tableau)\nAnalyze data and tell a story to help stakeholders understand the findings\nBuild and maintain ETL processes\n\nAirflow, Presto, PostgreSQL, Posit Connect (RStudio)\n\nExperiment analysis (A/B testing, stats)\nProphet model forecasting"
+  }
+]

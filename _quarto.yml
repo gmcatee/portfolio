@@ -1,0 +1,14 @@
+project:
+  type: website
+
+website:
+  title: "Guy McAtee"
+  sidebar:
+    style: "floating"
+    search: true
+    contents:
+      - index.qmd
+      - section: "Data Work"
+        contents:
+          - bring_current.qmd
+  

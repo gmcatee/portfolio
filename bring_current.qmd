@@ -1,0 +1,7 @@
+---
+title: "Collections for a Finance company:Bring Current Rates"
+---
+
+## Bring Current Rates
+This is where I will show the start-finish of the BC example
+
