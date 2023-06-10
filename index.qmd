@@ -2,8 +2,6 @@
 title: "About"
 ---
 
-## I'm a passionate rock climber, solving problems is what I do!
-
 ## Current Work
 
 ### Business Intelligence Engineer, Snap! Finance
