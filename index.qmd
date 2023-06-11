@@ -1,24 +1,12 @@
 ---
-title: "About"
+title: "Guy McAtee"
+format:
+  html:
+    page-layout: full
 ---
+:::: {.columns}
 
-## Current Work
-
-### Business Intelligence Engineer, Snap! Finance
-
--   My focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing... everyday!
-
--   Manage dashboards that use R Shiny and are hosted on the company's server, **Posit Connect**
-
--   Clean and prepare data from various sources (AWS S3, Presto/Postgre databases)
-
--   Automate reports (Anomaly detection, daily scripts, PowerPoints)
-
-## Education
-
-### Utah Valley University
-
--   BS Information Systems, Business Intelligence 2016-2020
+::: {.column width="45%"}
 
 ## What can I do for you?
 
@@ -41,3 +29,31 @@ A question better suited for you, but I will list some things here:
 -   Experiment analysis (A/B testing, stats)
 
 -   Prophet model forecasting
+:::
+
+::: {.column width="5%"}
+<!-- empty for space -->
+:::
+
+::: {.column width="50%"}
+
+## Current Work
+
+### Business Intelligence Engineer, Snap! Finance
+
+-   My focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing... everyday!
+
+-   Manage dashboards that use R Shiny and are hosted on the company's server, **Posit Connect**
+
+-   Clean and prepare data from various sources (AWS S3, Presto/Postgre databases)
+
+-   Automate reports (Anomaly detection, daily scripts, PowerPoints)
+
+## Education
+
+### Utah Valley University
+
+-   BS Information Systems, Business Intelligence 2016-2020
+:::
+
+::::

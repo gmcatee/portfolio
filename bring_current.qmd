@@ -1,6 +1,8 @@
 ---
 title: "Bring Current Rates"
-format: html
+format: 
+  html:
+    page-layout: full
 ---
 
 ```{r get data, include=FALSE}
@@ -126,7 +128,7 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
   
   ##### highchart using hcdf data
   sd_highchart() %>%
-    sdhc_title(text=paste0('LTO Cumulative Bring Current Rates By Cohort')) %>%
+    sdhc_title(text=paste0('Cumulative Bring Current Rates')) %>%
     sdhc_subtitle(text = eval(myHS)) %>% 
     hc_add_series_list(
       hcdf
@@ -201,7 +203,12 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
 
 ## Final Product
 
-```{r}
+```{r heatmap, echo = FALSE}
+
+```
+
+
+```{r, echo=FALSE}
 p
 ```
 
