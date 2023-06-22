@@ -1,0 +1,836 @@
+---
+title: "Prophet Model Forecast Demo"
+format: 
+  html:
+    page-layout: full
+---
+
+## Final Product
+```{r plot, echo=FALSE, warning=FALSE, message=FALSE}
+  library(DT)
+  library(snapdragon)
+  library(dplyr)
+  library(highcharter)
+  library(lubridate)
+  library(reshape2)
+  library(magrittr)
+  library(pins)
+  opts <- getOption("highcharter.lang")
+  opts$thousandsSep <- ","
+  options(highcharter.lang = opts)
+  
+  sd_board_register()
+
+  forecast_data <- pins::pin_get('forecast_cxn_auto', board = 'rsconnect')$ltoForecast %>% filter(day>=Sys.Date()-725)
+  actuals_data <- pins::pin_get('forecast_cxn_auto', board = 'rsconnect')$ltoActual %>% filter(day>=Sys.Date()-725)
+  my_product = 'rto'
+  time = 'day'
+
+  # forecast_data <- forecastData$ltoForecast
+  # actuals_data <- forecastData$ltoActual
+
+  if(my_product == 'rto') {
+    my_title = 'LTO Collections: Forecast vs. Actuals'
+  } else {
+    my_title = 'SLN Collections: Forecast vs. Actuals'
+  }
+  
+  if(time=='day'){
+    plot_data <- forecast_data %>% 
+      rename(x=day) %>% 
+      merge(
+        actuals_data %>% filter(day < Sys.Date()) %>% rename(x=day),
+        by.x = 'x',
+        all.x = TRUE
+      ) %>% 
+      mutate(
+        forecast = round(forecast,0),
+        actual = round(actual, 0),
+        residual = forecast - actual,
+        delta = actual - forecast
+      ) 
+  }else{ #weekly data
+    plot_data <- forecast_data %>% 
+      mutate(
+        x = floor_date(day,'week',week_start = 1)
+      ) %>% 
+      group_by(x) %>% 
+      summarise(forecast=sum(forecast),
+                low_forecast=sum(low_forecast),
+                high_forecast=sum(high_forecast)) %>% 
+      merge(
+        actuals_data %>% 
+          filter(day < Sys.Date()) %>% 
+          mutate(x=floor_date(day,'week',week_start = 1)) %>% 
+          group_by(x) %>% 
+          summarise(actual=round(sum(actual),0))
+          ,
+        by.x = 'x',
+        all.x = TRUE
+      ) %>% 
+      mutate(
+        residual = forecast - actual,
+        delta = actual - forecast
+      )
+  }
+  
+  #create series' for highchart
+    hcdf_eb <- plot_data %>% 
+      group_by(
+        name = '80% CI',
+        type = 'arearange',
+        color = snap_shade,
+        zIndex = 0,
+        yAxis = 0
+      ) %>% 
+      do(data = list_parse(
+        data.frame(
+          x = datetime_to_timestamp(.$x),
+          low = .$low_forecast,
+          high = .$high_forecast
+        )
+      ))
+    
+    hcdf <- plot_data %>% 
+      group_by(
+        name = 'Forecast',
+        type = 'line',
+        color = snap_grey_med,
+        zIndex = 1,
+        yAxis = 0
+      ) %>% 
+      do(data = list_parse(
+        data.frame(
+          x = datetime_to_timestamp(.$x),
+          y = .$forecast
+        )
+      ))
+    
+    hcdf_actual <- plot_data %>% 
+      group_by(
+        name = 'Actual',
+        type = 'line',
+
+        color = snap_blue,
+        zIndex = 2,
+        yAxis = 0
+      ) %>% 
+      do(data = list_parse(
+        data.frame(
+          x = datetime_to_timestamp(.$x),
+          y = .$actual
+        )
+      ))
+    
+    hcdf_delta <- plot_data %>% 
+      group_by(
+        name = 'Delta',
+        type = 'column',
+        # type = 'scatter',
+        color = snap_blue_light,
+        zIndex = 3,
+        yAxis = 1
+      ) %>% 
+      do(data = list_parse(
+        data.frame(
+          x = datetime_to_timestamp(.$x),
+          y = .$delta
+        )
+      ))
+  
+  highchart(type = 'stock') %>% 
+    sdhc_title(
+      text = my_title
+    ) %>%
+    hc_add_series_list(
+      rbind(
+        hcdf_eb,
+        hcdf_actual,
+        hcdf,
+        hcdf_delta
+      ) %>% 
+        ungroup() %>% 
+        mutate(
+          marker = list_parse(data.frame(
+            enabled = ifelse(name == 'Actual',TRUE,FALSE),
+            radius = ifelse(name == 'Actual',3,0),
+            symbol = 'circle'
+          )),
+          lineWidth = ifelse(name == 'Actual',0,2)
+        )
+    ) %>% 
+    hc_plotOptions(
+      series = list(
+        states = list(
+          hover = list(
+            enabled = FALSE
+          )
+        )
+      )
+    ) %>%
+    hc_tooltip(
+      split = TRUE
+    ) %>% 
+    hc_xAxis(
+      min = datetime_to_timestamp(
+        floor_date(
+          floor_date(
+            Sys.Date(),
+            'month'
+          ),
+          'week',
+          week_start = 1
+        )
+      ),
+      max = datetime_to_timestamp(
+        ceiling_date(
+          Sys.Date(), 
+          'week', 
+          week_start = 1
+        )
+      )
+    ) %>% 
+    hc_yAxis_multiples(
+      create_yaxis(2, heights = c(3,1), turnopposite = FALSE)
+    ) %>% 
+    hc_legend(
+      align = "left",
+      verticalAlign = "top",
+      layout = "vertical",
+      backgroundColor = '#FFFFFF',
+      x = 20,
+      y = 80,
+      enabled = TRUE,
+      floating = TRUE,
+      shadow = TRUE
+    ) 
+```
+
+```{r table, echo=FALSE}
+  # table
+  dt_data <- forecast_data %>% 
+    mutate(
+      day = as.Date(day)
+    ) %>% 
+    merge(
+      actuals_data %>% filter(day < Sys.Date()),
+      by.x = 'day',
+      all.x = TRUE
+    ) %>% 
+    mutate(
+      Date = day,
+      Day = weekdays(day),
+      Month = floor_date(day,'months'),
+      Forecast = round(forecast,0),
+      Actual = round(actual, 0),
+      # Residual = forecast - actual
+      Delta = actual - forecast
+    ) %>% 
+    group_by(week) %>% 
+    mutate(
+      'To Goal' = sum(Forecast) - cumsum(Actual),
+      `WTD Delta` = cumsum(Delta)
+    ) %>% 
+    ungroup() %>% 
+    group_by(Month) %>% 
+    mutate(`MTD Actual` = round(cumsum(actual),0),
+           `MTD Delta` = round(cumsum(Delta),0)) %>% 
+    ungroup() %>% 
+    rename(
+      'High Forecast' = high_forecast,
+      'Low Forecast' = low_forecast
+    ) %>% 
+    select(
+      Date,
+      Day,
+      Actual,
+      `MTD Actual`,
+      Forecast,
+      Delta,
+      `WTD Delta`,
+      `MTD Delta`,
+      `To Goal`,
+      `High Forecast`,
+      `Low Forecast`
+    )
+  
+  datatable(
+    dt_data,
+    rownames = FALSE,
+    extensions=c("Buttons", "FixedColumns"),
+    options = list(
+      dom = 'Bfrt',
+      buttons = c('csv', 'excel'),
+      searching = FALSE,
+      scrollY = '450px',
+      scrollX = TRUE,
+      paging=FALSE,
+      pageLength = 15,
+      order = list(0, 'desc'),
+      selection = 'single',
+      autoWidth = TRUE,
+      fixedColumns = list(leftColumns = 1, rightColumns = 0)
+      ,
+      # columnDefs = list(list(width = '200px')),
+      # rowCallback = JS(rowCallback),
+      headerCallback = JS(c(
+  "function( thead, data, start, end, display){
+  $(thead).closest('thead').find('th').eq(2).css('color','#003767');
+  $(thead).closest('thead').find('th').eq(4).css('color','#696969');
+  $(thead).closest('thead').find('th').eq(5).css('color','#5BC2E7');
+  $(thead).closest('thead').find('th').eq(9).css('color','#9A9A9A');
+  $(thead).closest('thead').find('th').eq(10).css('color','#9A9A9A');
+  }"
+))
+    )
+  ) %>% 
+    formatCurrency(c(3,4,5,6,7,8,9,10,11), digits = 0)
+```
+
+## Script for creating a Prophet forecast for dollars collected by a team of phone agents
+
+### Define holidays, first and last day of month,
+```{r forecast_model, echo=TRUE, eval=FALSE}
+# holidays 
+my_holidays <- presto(
+  "
+  SELECT * FROM events
+  "
+) %>% 
+  mutate(
+    federal = if_else(holiday == 'New Year', 1, federal),
+    federal = if_else(holiday == "President's Day", 1, federal),
+    federal = if_else(holiday == 'Independence Day', 1, federal),
+    federal = if_else(holiday == 'Independence Day Observed', 1, federal),
+    federal = if_else(holiday == "Veteran's Day", 1, federal),
+    federal = if_else(holiday == "Veteran's Day Observed", 1, federal),
+    federal = if_else(holiday == 'Christmas', 1, federal),
+    federal = if_else(holiday == 'Christmas Observed', 1, federal),
+  )
+
+us_events <- my_holidays %>% 
+  select(
+    -row.names,
+    -day_name,
+    -federal
+  )
+
+# paycycles and post holidays
+fom_eom_df <- data.frame(
+  date = seq(as.Date('2017-01-01'), Sys.Date()+365, by='day')
+) %>% 
+  rename(
+    DATE = date
+  ) %>% 
+  merge(
+    my_holidays %>% 
+      rename(DATE = ds) %>% 
+      filter(federal == 1) %>% 
+      select(
+        DATE,
+        federal
+      ),
+    by = 'DATE',
+    all.x = TRUE
+  ) %>% 
+  mutate(
+    dow = weekdays(DATE),
+    day_no = day(as.Date(DATE)),
+    federal = !(is.na(federal)),
+    eom = DATE == ceiling_date(DATE, 'month') - 1,
+    fom = DATE == floor_date(DATE, 'month'),
+    fbdom = case_when(
+      !(dow %in% c('Saturday','Sunday')) & fom == TRUE & federal == FALSE ~ TRUE,
+      lag(dow,1) == 'Sunday' & lag(fom,1) == TRUE & federal == FALSE ~ TRUE,
+      lag(dow,2) == 'Saturday' & lag(fom,2) == TRUE & federal == FALSE ~ TRUE,
+      lag(dow,2) == 'Sunday' & lag(fom,2) == TRUE & lag(federal,1) == TRUE & federal == FALSE ~ TRUE,
+      lag(dow,3) == 'Saturday' & lag(fom,3) == TRUE & lag(federal,1) == TRUE & federal == FALSE ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    lbdom = case_when(
+      !(dow %in% c('Saturday','Sunday')) & eom == TRUE & federal == FALSE ~ TRUE,
+      !(dow %in% c('Saturday','Sunday')) & lead(eom,1) == TRUE & lead(federal,1) == TRUE & federal == FALSE ~ TRUE,
+      lead(dow,1) == 'Saturday' & lead(eom,1) == TRUE & federal == FALSE ~ TRUE,
+      lead(dow,2) == 'Sunday' & lead(eom,2) == TRUE & federal == FALSE ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    mid_mo_payday = case_when(
+      day_no== 15 & !(dow %in% c('Saturday','Sunday')) ~ TRUE,
+      lag(day_no,1) == 15 & lag(dow,1) == 'Sunday' & federal == FALSE ~ TRUE,
+      lag(day_no,2) == 15 & lag(dow,2) == 'Saturday' & federal == FALSE ~ TRUE,
+      lag(day_no,2) == 15 & lag(dow,2) == 'Sunday' & lag(federal,1) == TRUE & federal == FALSE ~ TRUE,
+      lag(day_no,3) == 15 & lag(dow,3) == 'Saturday' & lag(federal,1) == TRUE & federal == FALSE ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    post_holiday = case_when(
+      lag(federal,1) == TRUE & federal == FALSE & !(dow %in% c('Saturday','Sunday')) ~ TRUE,
+      dow == 'Monday' & lag(federal,3) ~ TRUE,
+      TRUE ~ FALSE
+    )
+  )
+```
+
+### Get historical performance
+```{r create p, echo=TRUE, eval=FALSE}
+# define number of days to forecast
+forecast_days <- 14
+
+products<-c('A','B')
+for(my_product in products) {
+  print(my_product)
+
+ if (my_product == 'A') {
+    my_operator = '='
+    cutoff_dt = as.Date('2017-01-01')
+    dels_dt = cutoff_dt - 14
+  } else {
+    my_operator = '<>'
+    cutoff_dt = as.Date('2019-01-01')
+    dels_dt = cutoff_dt - 14
+  }
+  
+  # get other forecasted data of delinquencies each day to be used as addtl regressor
+  dels_future <- if(my_product == 'A'){
+    pin_get('active_dels_pin', 'rsconnect')$A_cxn %>% rename(ds = day)
+  }else{
+    pin_get('active_dels_pin', 'rsconnect')$B_cxn %>% rename(ds = day)
+  }
+
+    if(my_product == 'A'){
+      cxn_vol <- presto(paste0(
+        "
+          SELECT ca.payment_dt AS ds
+            , SUM(CAST(payment_amount AS DOUBLE)) AS y
+          FROM payment_data ca
+          WHERE ca.arrangement_status = 'VERIFIED'
+            AND ca.payment_dt >= date '",cutoff_dt,"'
+            AND product_type ",my_operator," 'A'
+          GROUP BY ca.payment_dt
+        "
+      )) 
+    
+      third_p<-presto(paste0(
+        "
+          SELECT
+            cat.effective_dt as ds
+            , SUM(CAST(credit_amount AS DOUBLE)) as y
+          FROM transaction_data cat
+          LEFT JOIN accounts ca 
+          	ON ca.id = cat.account_id
+          WHERE cat.posted_user_id = 12345 --this is third_p id
+            --and 'type' = 'REGULAR_PAYMENT'
+            AND cat.voided_ts is null 
+            AND cat.return_reason is null
+            AND cat.effective_dt >= date '2021-06-21'
+            AND cat.effective_dt < current_date
+            AND ca.product_type ",my_operator," 'A'
+          GROUP BY cat.effective_dt
+          "
+    ))
+
+      coll_vol_daily<-cxn_vol %>% rbind(third_p) %>% group_by(ds) %>% summarise(y=sum(y))
+    }else{ # vol for B
+      cxn_vol <- presto(paste0(
+        "
+          SELECT ca.payment_dt AS ds
+            , SUM(CAST(payment_amount AS DOUBLE)) AS y
+          FROM payments_prod ca
+          WHERE ca.arrangement_status = 'VERIFIED'
+            AND ca.payment_dt >= date '",cutoff_dt,"'
+            AND product_type ",my_operator," 'A'
+          GROUP BY ca.payment_dt
+        "
+      ))
+      
+      coll_vol_daily<-cxn_vol %>% group_by(ds) %>% summarise(y=sum(y))
+    }
+
+# prophet for each day -----------------------------------------------------------------
+  days<-0:6
+  DF_all<-data.frame()
+  m_all<-list()
+  forecast_all<-data.frame()
+
+# loop through each day of the week and save forecast to forecast_all
+  for (day in days) {
+  
+    message(paste0("starting wday: ", day))
+      
+    mod_coll_data <- coll_vol_daily %>% 
+      filter(
+        ds >= as.Date(cutoff_dt)
+      ) %>% 
+      mutate(
+        ds = as.Date(ds),
+        dow = weekdays(ds),
+        wday = wday(ds) - 1, # for monday as 0 first day of week
+        month = months(ds),
+        year = year(ds)
+      ) %>% 
+      merge(
+        fom_eom_df %>% rename(ds = DATE) %>% select(-dow),
+        by = 'ds',
+        all.x = TRUE
+      ) %>% 
+      mutate(
+        saturday = dow == 'Saturday',
+        monday = dow == 'Monday',
+        thursday = dow == 'Thursday',
+        friday = dow == 'Friday',
+        taxseason = week(ds) >= 5 & week(ds) <= 11
+      ) %>% 
+      filter(
+        ds < Sys.Date()
+        & !ds %in% c(
+          as.Date('2020-04-15')
+        )
+        & wday == {{ day }}
+      )
+    
+    # future data frame
+    
+    future_append <- data.frame(
+      ds = seq.Date(as.Date(min(mod_coll_data$ds)) ,(as.Date(my_end_date) + forecast_days), by = '1 day') %>%
+        format("%Y-%m-%d") %>%
+        as.Date()
+    ) %>% 
+      merge(
+        fom_eom_df %>% 
+          mutate(
+            ds = DATE %>% format("%Y-%m-%d") %>% as.Date()
+          ),
+        by = 'ds',
+        all.x = TRUE
+      )  %>% 
+      mutate(
+        saturday = dow == 'Saturday',
+        monday = dow == 'Monday',
+        friday = dow == 'Friday',
+        thursday = dow == 'Thursday',
+        taxseason = week(ds) >= 5 & week(ds) <= 11,
+        wday = wday(ds)-1 # for monday as first dow
+      ) %>%
+      merge(
+        dels_future, all = TRUE
+      ) %>% filter(wday == {{ day }})
+    
+    # forecast variables
+    
+    holidayDF = us_events
+    additional_regressors = c(
+      'federal',
+      'post_holiday',
+      'fbdom',
+      'lbdom',
+      'mid_mo_payday',
+      'taxseason',
+      'monday',
+      'friday',
+      'saturday',
+      'delinquencies'#number of active delinquencies
+    ) 
+    additional_future_data = list(future_append)
+    interval.width = .8
+    growth_model = 'linear'
+    # growth_model = 'logistic'
+    response_cap = NA
+    response_floor = 0
+    
+    # forecast df ####
+    DF <- mod_coll_data %>% 
+      filter(ds <= my_end_date) %>% 
+      merge(
+        holidayDF %>% 
+          mutate(ds = as.Date(ds %>% format("%Y-%m-%d"))),
+        by = 'ds',
+        all.x = TRUE
+      ) %>% 
+      merge(
+        dels_future %>% filter(ds>=as.Date(cutoff_dt)), by = 'ds'
+      ) %>%
+      mutate(
+        cap = response_cap,
+        floor = response_floor
+      ) %>% 
+      select(
+        -holiday,
+        -lower_window,
+        -upper_window,
+      ) %>% 
+      mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+    
+    end_date = as.Date(my_end_date)
+    if(is.na(response_cap)) {
+      response_cap = max(DF$y) + 6*(sd(DF$y))
+    }
+    
+    # model setup and additional regressors ####
+    m <- prophet(
+      seasonality.mode = "multiplicative"
+      , growth = growth_model # only way to forecast with saturating min or max
+      , holidays = holidayDF %>% filter(as.Date(ds) <= end_date)
+      , interval.width = interval.width
+      , daily.seasonality=FALSE
+      , yearly.seasonality = 13
+      , weekly.seasonality = 3
+    )
+    
+    # add user defined regressors
+    lar <- length(additional_regressors)
+    if(lar > 0) {
+      for(i in 1:lar) {
+        m = add_regressor(m, additional_regressors[i])
+      }
+    }
+
+    m$extra_regressors$saturday$prior.scale <- 10
+    # active dels mode
+    m$extra_regressors$delinquencies$mode <- 'multiplicative'#'additive'
+    
+    # model fit 
+    m = fit.prophet(m, DF)
+    
+    # forecast ####
+    # create future data frame on which to run the forecast
+    future <- make_future_dataframe(m, periods = 14) %>% 
+      mutate(ds = as.Date(ds %>% format("%Y-%m-%d"))) %>% 
+      left_join(
+        holidayDF %>% mutate(ds = as.Date(ds %>% format("%Y-%m-%d"))),
+        by = 'ds'
+      ) %>% 
+      filter(
+        wday(ds)-1 == {{ day }}
+      ) %>% 
+      mutate(
+        cap = response_cap,
+        floor = response_floor
+      ) %>% 
+      select(
+        -holiday,
+        -lower_window,
+        -upper_window
+      ) %>%
+      mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+    
+    # merge additional future data frames
+    if (length(additional_future_data) > 0) {
+      for(i in 1:length(additional_future_data)) {
+        future <- future %>% 
+          merge(
+            additional_future_data[i][[1]],
+            by = 'ds',
+            all.x = TRUE
+          ) %>% 
+          mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+      }
+      
+      future <- future %>% filter(!is.na(federal))
+    }
+    
+    forecast <- predict(m, future, mcmc.samples = 50)
+    # forecast$yhat
+    # dyplot.prophet(m_all,forecast_all)
+    eval(parse_expr(paste0("forecast_",day,"=forecast")))
+    message(paste0("forecast saved for wday: ", day))     
+    
+    #add days data to all data frame
+    DF_all <- DF_all %>% rbind(DF)
+    m_all <- m_all %>% append(m) #list
+    forecast_all <- forecast_all %>% rbind(forecast)
+  }
+  
+  # output linear model data
+    a1 <- 
+      DF_all %>%
+      group_by(day = as.Date(floor_date(ds, "day"))) %>%
+      summarise(
+        Actual = sum(y)
+      )
+    
+    b1 <-
+      forecast_all %>%
+      group_by(day = as.Date(floor_date(ds, "day"))) %>%
+      summarise(
+        Forecast = round(sum(yhat))
+        ,LowForecast = round(sum(yhat_lower),0)
+        ,HighForecast = round(sum(yhat_upper),0)
+      ) 
+  # combine fcst and actuals df  
+    outputDF <- b1 %>% left_join(a1)
+      
+      normHigh_name = paste0('normHigh',as.character(interval.width))
+      normLow_name = paste0('normLow',as.character(interval.width))
+      
+      outputDF <- outputDF %>% 
+        mutate(
+          Ratio = outputDF$Actual / outputDF$Forecast,
+          Uncertainty = interval.width,
+          Residual = outputDF$Actual - outputDF$Forecast,
+          !! normHigh_name := outputDF$HighForecast - outputDF$Forecast,
+          !! normLow_name := outputDF$LowForecast - outputDF$Forecast
+        )
+      
+      outputDF$dow = weekdays(outputDF$day)
+      
+  # this week
+    if (offset_bool == FALSE) {
+      my_filter = expr(
+        # day >= ceiling_date(Sys.Date(), 'week', week_start = 1)
+        # & day < ceiling_date(Sys.Date(), 'week', week_start = 1) + 7
+        floor_date(day,'week',week_start =1) == max(floor_date(day,'week',week_start =1)-7)
+      )
+    } else {
+      my_filter = expr(
+        day >= floor_date(Sys.Date(), 'week', week_start = 1) - (week_offset)
+        & day < ceiling_date(Sys.Date(), 'week', week_start = 1) - (week_offset)
+      )
+    }
+  
+  weekly_forecast_data <- outputDF %>%
+    filter(
+      eval(my_filter)
+      # day < '2022-01-24'
+    ) %>%
+    mutate(
+      week = floor_date(day, 'week', week_start = 1),
+      product = my_product
+    ) %>% 
+    rename(
+      forecast = Forecast,
+      low_forecast = LowForecast,
+      high_forecast = HighForecast
+    ) %>% 
+    select(
+      product,
+      week,
+      day,
+      dow,
+      forecast,
+      low_forecast,
+      high_forecast
+    ) %>% 
+    mutate(
+      week = as.character(week)
+      , day = as.character(day)
+      , forecast = as.double(forecast)
+      , low_forecast = as.double(low_forecast)
+      , high_forecast = as.double(high_forecast)
+    )
+    
+  if(test_code == TRUE){
+    
+  }else if(test_code == FALSE){
+    
+    # get current pin
+    pin<-pin_get("forecast_cxn_auto",board="rsconnect")
+    
+    # add new weekly forecast to the pin
+    if(my_product=='A'){
+      pin$AForecast <- pin$AForecast %>% rbind(weekly_forecast_data)
+      
+      # re-pin the data
+    pin(pin, "forecast_cxn_auto", board="rsconnect")
+    
+    prior_forecast <- pin_get("forecast_cxn_auto", "rsconnect")$AForecast %>%
+      arrange(
+        day
+      ) %>%
+      filter(
+        week == floor_date(max(week)-1, 'week', week_start = 1)
+      )
+    
+    # eval(parse_expr(paste0(my_product,'_prio_forecast_data=prior_forecast')))
+    
+    }else{
+      pin$BForecast <- pin$BForecast %>% rbind(weekly_forecast_data)
+      
+      # re-pin the data
+      pin(pin, "forecast_cxn_auto", board="rsconnect")
+      
+      prior_forecast <- pin_get("forecast_cxn_auto", "rsconnect")$BForecast %>%
+        arrange(
+          day
+        ) %>%
+        filter(
+          week == floor_date(max(week) - 1, 'week', week_start = 1)
+        )
+    }
+    
+    # print out weekly forecast
+    paste0(my_product,' Forecast: $',sum(weekly_forecast_data$forecast)) %>% print()
+    paste0(my_product,' Low Forecast: $',sum(weekly_forecast_data$low_forecast)) %>% print()
+    paste0(my_product,' High Forecast: $',sum(weekly_forecast_data$high_forecast)) %>% print()
+    
+    # print out prior weekly forecast
+    paste0(my_product,' Prior Forecast: $',sum(prior_forecast$forecast)) %>% print()
+    paste0(my_product,' Prior Low Forecast: $',sum(prior_forecast$low_forecast)) %>% print()
+    paste0(my_product,' Prior High Forecast: $',sum(prior_forecast$high_forecast)) %>% print()
+    
+  }
+  
+}
+
+```
+
+### Store forecast and actuals in pin
+```{r pin_data, echo=TRUE, eval=FALSE}
+AForecast <- pin_get("forecast","rsconnect")$AForecast
+
+cxn_A_actual <- presto(
+  "
+  SELECT ca.payment_dt AS day
+    , SUM(CAST(payment_amount AS DOUBLE)) AS actual
+  FROM snap_analytics.snapanalytics.collections_arrangements_automated ca
+  WHERE ca.arrangement_status = 'VERIFIED'
+    AND ca.payment_dt >= date '2020-06-21'
+    AND product_type = 'A'
+  GROUP BY ca.payment_dt
+"
+) 
+# week of 6/21/21 we decided to include third_p
+third_p <- presto(
+  "
+  SELECT
+    effective_dt as day
+    , SUM(CAST(credit_amount AS DOUBLE)) as actual
+  FROM transactions cat
+  WHERE cat.posted_user_id = 12345 --this is third_p id
+    --and 'type' = 'REGULAR_PAYMENT'
+    and cat.voided_ts is null 
+    and cat.return_reason is null
+  -- the week we decided to start including third_p in the actuals
+    and effective_dt >=date '2021-06-21'
+    and effective_dt < current_date
+  GROUP BY effective_dt
+")
+
+AActual<-cxn_A_actual %>% rbind(third_p) %>% group_by(day) %>% summarise(actual=sum(actual))
+
+
+#get pin
+forecastData <- pins::pin_get("forecast", board = "rsconnect")
+
+#update data
+forecastData$AForecast <- AForecast
+forecastData$AActual <- AActual
+
+BActual <- presto(paste0(
+        "
+          SELECT ca.payment_dt AS day
+            , SUM(CAST(payment_amount AS DOUBLE)) AS actual
+          FROM snap_analytics.snapanalytics.collections_arrangements ca
+          WHERE ca.arrangement_status = 'VERIFIED'
+            AND ca.payment_dt >= date '2019-01-01'
+            AND product_type != 'A'
+          GROUP BY ca.payment_dt
+        "
+      ))
+BForecast <- pin_get("forecast","rsconnect")$BForecast
+forecastData$BForecast <- BForecast
+forecastData$BActual <- BActual
+
+#update pin with updated data
+pins::pin(forecastData, name = 'forecast', board = 'rsconnect')
+```
+
+## Plot created with highcharts and table with Reactable

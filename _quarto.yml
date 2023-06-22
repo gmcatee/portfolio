@@ -6,13 +6,13 @@ website:
   title: "About"
   sidebar:
     style: "floating"
-    search: true
     logo: profile.jpeg
     contents:
       - index.qmd
       - section: "Data Work"
         contents:
           - bring_current.qmd
+          - prophet_model.qmd
 
 format: 
   html: 

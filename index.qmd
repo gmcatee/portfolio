@@ -8,9 +8,7 @@ format:
 
 ::: {.column width="45%"}
 
-## What can I do for you?
-
-A question better suited for you, but I will list some things here:
+## How can I help you?
 
 -   Build and maintain ETL processes
 
@@ -48,6 +46,8 @@ A question better suited for you, but I will list some things here:
 -   Clean and prepare data from various sources (AWS S3, Presto/Postgre databases)
 
 -   Automate reports (Anomaly detection, daily scripts, PowerPoints)
+
+-   Communicate portfolio health to managers and C-Suite
 
 ## Education
 
