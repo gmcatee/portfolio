@@ -8,25 +8,25 @@ format:
 
 ::: {.column width="45%"}
 
-## How can I help you?
+## Skills
 
 -   Build and maintain ETL processes
 
-    -   Airflow, Presto, PostgreSQL, Posit Connect (RStudio)
+    -   Presto SQL, Postgre SQL, R, Python, Airflow, Posit Connect (RStudio)
+    
+-   Experiment analysis (A/B testing, stats)
+
+-   Prophet model forecasting
 
 -   Build interactive and compelling visuals
 
     -   Highcharts, Plotly, GGPlot etc.
 
--   Build interactive Dashboards in little time
+-   Build interactive Dashboards
 
     -   RShiny, Graveler, BS4, ZenDash, Tableau
 
--   Analyze data and tell a story to help stakeholders understand the findings
-
--   Experiment analysis (A/B testing, stats)
-
--   Prophet model forecasting
+-   Data storytelling
 :::
 
 ::: {.column width="5%"}

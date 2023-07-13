@@ -5,87 +5,55 @@ format:
     page-layout: full
 ---
 
+## Project
+
+> Create a forecast to help a team of phone agents set goals/incentive for each week. The forecast is generated each week and adjusted as necessary. The regressors for the forecast include holidays, day of week, day of month, size of portfolio etc.
+
 ## Final Product
+
 ```{r plot, echo=FALSE, warning=FALSE, message=FALSE}
   library(DT)
-  library(snapdragon)
   library(dplyr)
   library(highcharter)
   library(lubridate)
   library(reshape2)
   library(magrittr)
-  library(pins)
   opts <- getOption("highcharter.lang")
   opts$thousandsSep <- ","
   options(highcharter.lang = opts)
   
-  sd_board_register()
-
-  forecast_data <- pins::pin_get('forecast_cxn_auto', board = 'rsconnect')$ltoForecast %>% filter(day>=Sys.Date()-725)
-  actuals_data <- pins::pin_get('forecast_cxn_auto', board = 'rsconnect')$ltoActual %>% filter(day>=Sys.Date()-725)
-  my_product = 'rto'
-  time = 'day'
-
-  # forecast_data <- forecastData$ltoForecast
-  # actuals_data <- forecastData$ltoActual
-
-  if(my_product == 'rto') {
-    my_title = 'LTO Collections: Forecast vs. Actuals'
-  } else {
-    my_title = 'SLN Collections: Forecast vs. Actuals'
-  }
+  # write.csv(forecast_data, "forecast.csv")
+  # write.csv(actuals_data, "actuals.csv")
   
-  if(time=='day'){
+  forecast_data <- read.csv('forecast.csv') %>% select(-X)
+  actuals_data <- read.csv('actuals.csv') %>% select(-X)
+
+  my_title = 'Collections: Forecast vs. Actuals'
+  
     plot_data <- forecast_data %>% 
-      rename(x=day) %>% 
-      merge(
-        actuals_data %>% filter(day < Sys.Date()) %>% rename(x=day),
-        by.x = 'x',
-        all.x = TRUE
+      left_join(
+        actuals_data %>% filter(day < Sys.Date())
       ) %>% 
       mutate(
         forecast = round(forecast,0),
         actual = round(actual, 0),
         residual = forecast - actual,
         delta = actual - forecast
-      ) 
-  }else{ #weekly data
-    plot_data <- forecast_data %>% 
-      mutate(
-        x = floor_date(day,'week',week_start = 1)
       ) %>% 
-      group_by(x) %>% 
-      summarise(forecast=sum(forecast),
-                low_forecast=sum(low_forecast),
-                high_forecast=sum(high_forecast)) %>% 
-      merge(
-        actuals_data %>% 
-          filter(day < Sys.Date()) %>% 
-          mutate(x=floor_date(day,'week',week_start = 1)) %>% 
-          group_by(x) %>% 
-          summarise(actual=round(sum(actual),0))
-          ,
-        by.x = 'x',
-        all.x = TRUE
-      ) %>% 
-      mutate(
-        residual = forecast - actual,
-        delta = actual - forecast
-      )
-  }
+      arrange(day)
   
   #create series' for highchart
     hcdf_eb <- plot_data %>% 
       group_by(
         name = '80% CI',
         type = 'arearange',
-        color = snap_shade,
+        color = "#EDEDED",
         zIndex = 0,
         yAxis = 0
       ) %>% 
       do(data = list_parse(
         data.frame(
-          x = datetime_to_timestamp(.$x),
+          x = datetime_to_timestamp(as.Date(.$day)),
           low = .$low_forecast,
           high = .$high_forecast
         )
@@ -95,13 +63,13 @@ format:
       group_by(
         name = 'Forecast',
         type = 'line',
-        color = snap_grey_med,
+        color = "#9A9A9A",
         zIndex = 1,
         yAxis = 0
       ) %>% 
       do(data = list_parse(
         data.frame(
-          x = datetime_to_timestamp(.$x),
+          x = datetime_to_timestamp(as.Date(.$day)),
           y = .$forecast
         )
       ))
@@ -111,13 +79,13 @@ format:
         name = 'Actual',
         type = 'line',
 
-        color = snap_blue,
+        color = "#003767",
         zIndex = 2,
         yAxis = 0
       ) %>% 
       do(data = list_parse(
         data.frame(
-          x = datetime_to_timestamp(.$x),
+          x = datetime_to_timestamp(as.Date(.$day)),
           y = .$actual
         )
       ))
@@ -127,19 +95,19 @@ format:
         name = 'Delta',
         type = 'column',
         # type = 'scatter',
-        color = snap_blue_light,
+        color = "#5BC2E7",
         zIndex = 3,
         yAxis = 1
       ) %>% 
       do(data = list_parse(
         data.frame(
-          x = datetime_to_timestamp(.$x),
+          x = datetime_to_timestamp(as.Date(.$day)),
           y = .$delta
         )
       ))
   
   highchart(type = 'stock') %>% 
-    sdhc_title(
+    hc_title(
       text = my_title
     ) %>%
     hc_add_series_list(
@@ -210,17 +178,15 @@ format:
   # table
   dt_data <- forecast_data %>% 
     mutate(
-      day = as.Date(day)
+      day 
     ) %>% 
-    merge(
-      actuals_data %>% filter(day < Sys.Date()),
-      by.x = 'day',
-      all.x = TRUE
+    left_join(
+      actuals_data %>% filter(day < Sys.Date())
     ) %>% 
     mutate(
-      Date = day,
-      Day = weekdays(day),
-      Month = floor_date(day,'months'),
+      Date = as.Date(day),
+      Day = weekdays(Date),
+      Month = floor_date(Date,'months'),
       Forecast = round(forecast,0),
       Actual = round(actual, 0),
       # Residual = forecast - actual
@@ -289,7 +255,8 @@ format:
 
 ## Script for creating a Prophet forecast for dollars collected by a team of phone agents
 
-### Define holidays, first and last day of month,
+### Define holidays, first and last day of month
+
 ```{r forecast_model, echo=TRUE, eval=FALSE}
 # holidays 
 my_holidays <- presto(
@@ -371,6 +338,7 @@ fom_eom_df <- data.frame(
 ```
 
 ### Get historical performance
+
 ```{r create p, echo=TRUE, eval=FALSE}
 # define number of days to forecast
 forecast_days <- 14
@@ -773,6 +741,7 @@ for(my_product in products) {
 ```
 
 ### Store forecast and actuals in pin
+
 ```{r pin_data, echo=TRUE, eval=FALSE}
 AForecast <- pin_get("forecast","rsconnect")$AForecast
 
@@ -780,7 +749,7 @@ cxn_A_actual <- presto(
   "
   SELECT ca.payment_dt AS day
     , SUM(CAST(payment_amount AS DOUBLE)) AS actual
-  FROM snap_analytics.snapanalytics.collections_arrangements_automated ca
+  FROM payments ca
   WHERE ca.arrangement_status = 'VERIFIED'
     AND ca.payment_dt >= date '2020-06-21'
     AND product_type = 'A'
@@ -818,7 +787,7 @@ BActual <- presto(paste0(
         "
           SELECT ca.payment_dt AS day
             , SUM(CAST(payment_amount AS DOUBLE)) AS actual
-          FROM snap_analytics.snapanalytics.collections_arrangements ca
+          FROM payments ca
           WHERE ca.arrangement_status = 'VERIFIED'
             AND ca.payment_dt >= date '2019-01-01'
             AND product_type != 'A'

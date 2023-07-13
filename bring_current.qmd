@@ -5,14 +5,18 @@ format:
     page-layout: full
 ---
 
+## Project
+> Display rate of recovery for weekly tranches of delinquent accounts over time. 
+
 ```{r get data, include=FALSE}
 library(dplyr)
-library(snapdragon)
 library(highcharter)
 library(lubridate)
 library(reshape2)
 library(magrittr)
 library(pins)
+library(tidyr)
+library(reactable)
 library(htmlwidgets)
 library(manipulateWidget)
 
@@ -20,12 +24,11 @@ opts <- getOption("highcharter.lang")
 opts$thousandsSep <- ","
 options(highcharter.lang = opts)
 
-sd_board_register()
-bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
+bc <- read.csv('bc_data.csv') %>% select(-X)
 
-  outputdf <- bc %>% 
-    select(
-      Week,
+outputdf <- bc %>% 
+    transmute(
+      Week=as.Date(Week),
       DelinquencyAge7,
       BCRateCuml
     ) %>% 
@@ -35,13 +38,17 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
       value = BCRateCuml
     ) %>%
     mutate(
-      x = as.numeric(factor(Age)),
+      x = as.numeric(factor(Age,levels = c(
+        "Day 0","Week 1",        
+        "Week 2","Week 3","Week 4","Week 5",           
+        "Week 6","Week 7","Week 8","Week 9","Week 10+"
+      ))),
       value = round(value * 100, 2)
     ) %>% 
     bind_rows(
       bc %>% 
         group_by(
-          Cohort = Week,
+          Cohort = as.Date(Week),
           value = Delinquencies
         ) %>% 
         summarise(
@@ -69,16 +76,14 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
       Age
     ) %>% 
     mutate(
-      y = row_number() - 1
-    ) %>% na.omit() %>% 
+      y = row_number() - 1,
+      x=ifelse(Age=='New Delinquencies',0,x)
+    ) %>% na.omit() %>%
     filter(
     x - 1 < (floor_date(Sys.Date(), 'week', week_start = 1) -  Cohort) / 7
   )
-    df = outputdf 
-    myProd = 'RTO'
-    myHS = 'Hardship accounts excluded'
   
-  hcdf <- df %>%
+  hcdf <- outputdf %>%
     group_by(
       type = 'heatmap',
       colorAxis = x
@@ -99,10 +104,10 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
   # color palette using the input df mean and std dev -> white bg for the new delinquencies column
     Pals <- list()
     #loop through all levels 'columns' in input df and get mean and sd
-    for(i in levels(df$Age)) {
+    for(i in levels(outputdf$Age)) {
       # print(i)
-      mm <- mean(df$value[df$Age == i])
-      msd <- sd(df$value[df$Age == i])
+      mm <- mean(outputdf$value[outputdf$Age == i])
+      msd <- sd(outputdf$value[outputdf$Age == i])
       # if column is nd then white bg
       if(i == 'New Delinquencies') {
         pal <- list(
@@ -130,9 +135,8 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
     }
   
   ##### highchart using hcdf data
-  sd_highchart() %>%
-    sdhc_title(text=paste0('Cumulative Bring Current Rates')) %>%
-    sdhc_subtitle(text = eval(myHS)) %>% 
+  highchart() %>%
+    hc_title(text=paste0('LTO Cumulative Bring Current Rates By Cohort'), align='left') %>%
     hc_add_series_list(
       hcdf
     ) %>%
@@ -141,16 +145,16 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
     ) %>%
     hc_yAxis(
       #show max - 16 rows of data
-      min = max(df$y) - 16,
-      max = max(df$y),
+      min = max(outputdf$y) - 16,
+      max = max(outputdf$y),
       scrollbar = list(
         enabled = FALSE
       ),
-      categories = factor(unique(df$Cohort))
+      categories = factor(unique(outputdf$Cohort))
     ) %>%
     hc_xAxis(
       opposite = TRUE,
-      categories = levels(df$Age)
+      categories = levels(outputdf$Age)
     ) %>%
     hc_plotOptions(
       series = list(
@@ -184,21 +188,10 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
             };
           }"
         )
-    )->p
-  # %>% hc_exporting(
-  #     enabled = TRUE, 
-  #     allowHTML = TRUE, 
-  #     sourceWidth = 900, 
-  #     sourceHeight = 600, 
-  #     chartOptions = list(
-  #       navigator = list(enabled = FALSE),
-  #       rangeSelector = list(enabled = FALSE), 
-  #       scrollbar = list(enabled = FALSE)
-  #     )
-  #   ) -> p
+    ) -> p
+  
   # color palette for color axis of highchart
   p$x$hc_opts$colorAxis <- Pals
-  p
   
  # code for line chart
   df = bc
@@ -232,12 +225,16 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
       week_num = week(date_label)
     ) %>% filter(year(date_label)=="2023")
   
-  bca_plot_data <- df %>%
+  bca_plot_data <- df %>% 
     na.omit() %>% 
     mutate(
+      DelinquencyAge7 = factor(DelinquencyAge7, levels = c("Day 0" ,"Week 1", "Week 2",
+                                              "Week 3", "Week 4", "Week 5",
+                                              "Week 6", "Week 7", "Week 8",
+                                              "Week 9", "Week 10+")),
       year = year(Week),
       week_num = week(Week),
-      week_actual = Week + weeks(as.integer(DelinquencyAge7) - 1),
+      week_actual = as.Date(Week) + lubridate::weeks(as.integer(DelinquencyAge7) - 1),
       bcr = ifelse(week_actual <= floor_date(Sys.Date(), 'week', week_start = 1), eval(sym(myRate)), NA)
     ) %>% 
     filter(
@@ -267,12 +264,12 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
       name = year,
       type = 'line',
       color = case_when(
-        year == year(Sys.Date()) ~ snap_orange,
-        year == year(Sys.Date()) -1 ~ snap_blue,
-        year == year(Sys.Date()) -2 ~ snap_blue_light,
-        year == year(Sys.Date()) -3 ~ snap_grey_light,
-        year == year(Sys.Date()) -4 ~ snap_green,
-        year == year(Sys.Date()) -5 ~ snap_purple
+        year == year(Sys.Date()) ~ "#FF7214",
+        year == year(Sys.Date()) -1 ~ "#003767",
+        year == year(Sys.Date()) -2 ~ "#5BC2E7",
+        year == year(Sys.Date()) -3 ~ "#CCCCCC",
+        year == year(Sys.Date()) -4 ~ "#8DC63F",
+        year == year(Sys.Date()) -5 ~ "#8651A1"
       ), 
       lineWidth = case_when(
         year == year(Sys.Date()) ~ 3,
@@ -292,15 +289,15 @@ bc <- pin_get('bringCurrent', board='rsconnect')$bcNHS
   stimulus_line = floor_date(as.Date('2023-04-15'), 'week', week_start = 1) - weeks(cohort_age_ref)
   
   line <- highchart(type = 'stock') %>% 
-    sdhc_title(text = paste0('Day 0 Bring Current Rates')) %>%
-    sdhc_subtitle(text = subtitle) %>% 
+    hc_title(text = paste0('Day 0 Bring Current Rates'), align='left') %>%
+    # sdhc_subtitle(text = subtitle) %>% 
     hc_add_series_list(
       hcdf
     ) %>% 
     hc_xAxis(
       plotLines = list(
         list(
-          value = datetime_to_timestamp(covid_line), label = list(text='Covid 2020', color = snap_grey)
+          value = datetime_to_timestamp(covid_line), label = list(text='Covid 2020', color = "#696969")
         ),
         list(
           value = datetime_to_timestamp(stimulus_line), label = list(text='Stimulus 2020', align = 'left')
@@ -346,7 +343,7 @@ line
          DATE(recovered_ts AT TIME ZONE 'America/Denver'))
          ELSE NULL
        END AS days
-   FROM current.snapcollections__delinquency_event de
+   FROM de_table de
    WHERE DATE(delinquency_ts AT TIME ZONE 'America/Denver') >= date '2020-01-01'
  ")
 ```
@@ -388,9 +385,9 @@ for(i in levels(df$Age)) {
 }
   
   ##### highchart using hcdf data
-  sd_highchart() %>%
-    sdhc_title(text=paste0('Cumulative Bring Current Rates')) %>%
-    sdhc_subtitle(text = eval(myHS)) %>% 
+  highchart() %>%
+    hc_title(text=paste0('Cumulative Bring Current Rates')) %>%
+    # sdhc_subtitle(text = eval(myHS)) %>% 
     hc_add_series_list(
       hcdf
     ) %>%
@@ -516,12 +513,12 @@ for(i in levels(df$Age)) {
       name = year,
       type = 'line',
       color = case_when(
-        year == year(Sys.Date()) ~ snap_orange,
-        year == year(Sys.Date()) -1 ~ snap_blue,
-        year == year(Sys.Date()) -2 ~ snap_blue_light,
-        year == year(Sys.Date()) -3 ~ snap_grey_light,
-        year == year(Sys.Date()) -4 ~ snap_green,
-        year == year(Sys.Date()) -5 ~ snap_purple
+        year == year(Sys.Date()) ~ "#FF7214",
+        year == year(Sys.Date()) -1 ~ "#003767",
+        year == year(Sys.Date()) -2 ~ "#5BC2E7",
+        year == year(Sys.Date()) -3 ~ "#CCCCCC",
+        year == year(Sys.Date()) -4 ~ "#8DC63F",
+        year == year(Sys.Date()) -5 ~ "#8651A1"
       ), 
       lineWidth = case_when(
         year == year(Sys.Date()) ~ 3,
@@ -538,15 +535,15 @@ for(i in levels(df$Age)) {
     ))
 
 highchart(type = 'stock') %>% 
-    sdhc_title(text = paste0('Day 0 Bring Current Rates')) %>%
-    sdhc_subtitle(text = subtitle) %>% 
+    hc_title(text = paste0('Day 0 Bring Current Rates')) %>%
+    # sdhc_subtitle(text = subtitle) %>% 
     hc_add_series_list(
       hcdf
     ) %>% 
     hc_xAxis(
       plotLines = list(
         list(
-          value = datetime_to_timestamp(covid_line), label = list(text='Covid 2020', color = snap_grey)
+          value = datetime_to_timestamp(covid_line), label = list(text='Covid 2020', color = "#696969")
         ),
         list(
           value = datetime_to_timestamp(stimulus_line), label = list(text='Stimulus 2020', align = 'left')
