@@ -1,4 +1,8 @@
-li, ul {
-    font-size: 16px;
-    display: inline;
+button.btn.btn-default {
+  font-size: 16px;
+  background: #DEDEDE;
+}
+
+.skills_list {
+  margin-bottom: 60px;
 }

@@ -9,8 +9,9 @@ website:
     logo: profile.jpeg
     contents:
       - index.qmd
-      - section: "Data Work"
+      - section: "Work Samples"
         contents:
+          - sql_demo.qmd
           - bring_current.qmd
           - prophet_model.qmd
 

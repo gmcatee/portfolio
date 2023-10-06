@@ -1,0 +1,224 @@
+---
+title: "SQL"
+format: 
+  html:
+    page-layout: full
+---
+
+## Loan Management System data
+
+### Simple filtering and use of the json_extract_scalar function in Presto.
+> This query was written to help investigate issues in a software where a certain ip address was disabling the autopay option for many Loans before their first payment date. After validating the query, I automated this query to run every day on the entire portfolio and report back on all times a Loan had their autopay status disabled. This helped dev teams determine the cause for the issue and implement a solution, taking the rate of Loans not making a payment from 20% to 7%.
+
+```{r, echo=TRUE, eval=FALSE}
+  select 
+    sne.entity_id
+    , sne.created
+    , json_extract_scalar(note_data, '$.autopayEnabled.oldValue') as oldValue
+    , json_extract_scalar(note_data, '$.autopayEnabled.newValue') as newValue
+    , sne.note_data
+    , sne.note_title
+    , sne.create_user_name
+    , sne.remote_addr -- ip address of the user that made the change
+  from system_note_entity sne
+  where sne.entity_type = 'Entity.Loan' 
+  and sne.reference_type = 'Entity.LoanSettings' -- use this because we know the field is stored there
+  and sne.entity_id = 4988559553
+  and json_extract_scalar(note_data, '$.autopayEnabled.newValue') IS NOT NULL -- filter to where there is a newValue
+  
+```
+
+### Write a query that returns the number of active hardships each day since 2019-01-01
+> Each hardship has a start and end date. Here you will see how I use a sequence of days along with the hardship data to return the needed results.
+
+```{r, echo=TRUE, eval=FALSE}
+  with days as (  -- sequence of days since 2019-01-01
+    select
+      cast(day as date) day
+    from
+    (VALUES
+    (SEQUENCE(FROM_ISO8601_DATE('2019-01-01'), 
+        FROM_ISO8601_DATE(cast(current_date as varchar)), 
+        interval '1' day)
+    )
+    ) AS t1(date_array)
+    cross join
+    unnest(date_array) as t2(day)
+  )
+  , hs_info as ( -- use MAX to get one row per loan
+  	select 
+  		le.id
+  		, TRIM(le.display_id) as application_id
+  		, MAX(cast(case when cfe.custom_field_id = 160 then cfe.custom_field_value else null end as DATE)) as hardship_start_dt
+  	  , MAX(cast(case when cfe.custom_field_id = 161 then cfe.custom_field_value else null end as DATE)) as hardship_end_dt
+  	from loan_entity le
+  	join custom_field__entity cfe 
+  		on le.settings_id = cfe.entity_id 
+      and cfe.entity_type = 'Entity.LoanSettings'
+  	join custom_field cf 
+  		on cf.id = cfe.custom_field_id 
+  	where le.active = 1 and le.deleted = 0
+  	and cfe.deleted = 0 and cf.active = 1
+  	and cfe.custom_field_id in (160,161) -- ids for hs start and end dts
+  	and cfe.custom_field_value IS not null
+  	and cfe.custom_field_value != ''
+  	group by le.id, TRIM(le.display_id)
+  )
+  -- join the days and hs_info ctes 
+  select 
+    dlp.day
+    , COUNT(distinct h.application_id) hs_accts
+  from days d
+  left join hs_info h
+    on d.day between h.hardship_start_dt and h.hardship_end_dt
+  group by dlp.day
+```
+
+## Determine if a loan is "past due" based on their transaction report
+> Using the loan transaction report I build a cumulative schedulePayments and compare it to the cumulative payments to determine if someone is "past due" on a given day. There are are several other tables in this query that I used to ensure the loan was past due.
+
+```{sql, echo=TRUE, eval=FALSE}
+with days as (
+  SELECT
+      CAST(day AS DATE) day
+    FROM
+    (VALUES
+    (SEQUENCE(FROM_ISO8601_DATE('2019-01-01'), 
+        FROM_ISO8601_DATE(cast(current_date as VARCHAR)), 
+        INTERVAL '1' DAY)
+    )
+    ) AS t1(date_array)
+    CROSS JOIN
+    UNNEST(date_array) AS t2(day)
+  )
+  , cuml_loan as (
+      select d.day
+      , dpd.entity_id as loan_id
+      , TRIM(le.display_id) as application_id
+      , lpv.portfolios_100
+      , dpd.sub_status
+      , dpd.contract_date 
+      , lae.apply_date as last_ap_apply_date
+      , lae.process_datetime as last_ap_process_ts
+      , lae.last_ap_amt 
+      , lae.freq
+      , coalesce(cast(SUM(pe.amount) over (partition by dpd.entity_id order by d.day) as DOUBLE),0) + coalesce(cast(SUM(c.payment_amount) over (partition by dpd.entity_id order by d.day) as DOUBLE),0) as total_paid
+      -- payments from payment_entity and tx detail
+      , SUM(pe.amount) over (partition by dpd.entity_id order by d.day) as cuml_amt_paid
+      -- credits from loan_tx
+      , SUM(c.payment_amount) over (partition by dpd.entity_id order by d.day) as cuml_credit
+      -- below is the amt owed each day
+      , SUM(s.charge_amount) over (partition by dpd.entity_id order by d.day) as cuml_min_amt
+      -- interest adjustments
+      , SUM(adj.amount) over (partition by dpd.entity_id order by d.day) as cuml_i_adj_amt
+      , coalesce(cast(SUM(s.charge_amount) over (partition by dpd.entity_id order by d.day) as double), 0)+ coalesce(cast(SUM(adj.amount) over (partition by dpd.entity_id order by d.day) AS DOUBLE),0) as cuml_owed_amt
+      from days d
+      join ( -- only return loans that had dpd reset yesterday and their contract date
+          select distinct tx.entity_id, lse1.contract_date, lsse.title as sub_status
+          from  loan_tx tx
+          left join  loan_setup_entity lse1 -- get contract date 
+              ON lse1.loan_id = tx.entity_id  
+              AND lse1.deleted = 0 AND lse1.mod_id = 0 
+      left join  loan_settings_entity lse 
+        ON lse.loan_id = tx.entity_id and lse.deleted = 0
+      left join  loan_sub_status_entity lsse 
+        on lsse.id = lse.loan_sub_status_id and lsse.active = 1 and lsse.deleted = 0
+          where 1=1
+          and tx.title = 'Days Past Due Reset' 
+          and tx.date = current_date 
+      ) dpd on d.day >= dpd.contract_date
+      left join  loan_entity le on le.id = dpd.entity_id and le.deleted = 0    
+      left join ( -- get all pmts and the amts split by P & I
+          select pe.entity_id, pe.apply_date, SUM(tx.payment_amount) AS amount
+          from  payment_entity pe 
+          left join  loan_tx tx on tx.payment_id = pe.id
+          where 1=1 
+              and pe.active = 1 and pe.deleted = 0
+              and reverse_reason is null
+              and reverse_date is null
+        and tx.deleted = 0
+          group by 1,2
+      ) pe on pe.entity_id = dpd.entity_id and d.day=pe.apply_date 
+      left join ( -- get the scheduled pmts from loan_tx
+          select tx.entity_id, tx.date, SUM(tx.charge_amount) as charge_amount --, tx.charge_i, tx.charge_p  
+          from  loan_tx tx 
+          where tx.type = 'scheduledPayment'
+              and tx.deleted = 0
+          group by 1,2
+      ) s on s.entity_id = dpd.entity_id and s.date = d.day
+      left join ( -- get all credits split by P & I
+          select tx.entity_id,  tx.date, SUM(tx.payment_amount) as payment_amount --, tx.payment_p, tx.payment_i
+          from  loan_tx tx 
+          where type = 'credit'
+              and tx.deleted = 0
+      group by 1,2
+      ) c on c.entity_id = dpd.entity_id and c.date = d.day
+      left join ( -- interest adjustments decrease is less money ALICE owes Snap
+          select distinct tx.entity_id,  tx.date, 
+          case when json_extract_scalar(info_details, '$.type') = 'decrease' then cast(json_extract_scalar(info_details, '$.amount') as double) * -1 else cast(json_extract_scalar(info_details, '$.amount') as double) end as amount
+          from  loan_tx tx 
+          where type = 'intAdjustment'
+              and tx.deleted = 0
+      ) adj on adj.entity_id = dpd.entity_id and adj.date = d.day
+    left join ( -- get latest completed autopay amt for each loan
+        select lae.loan_id, lae.apply_date, lae.process_datetime, lae.recurring_frequency AS freq, dense_rank() over (partition by lae.loan_id order by lae.apply_date desc, lae.amount desc, lae.recurring_frequency) as rn, lae.amount as last_ap_amt
+        from  loan_autopay_entity lae
+        where lae.deleted = 0 and lae.active = 1 
+      and lae.status = 'autopay.status.completed'
+      and lae.apply_date <= current_date
+    ) lae on lae.loan_id = dpd.entity_id and lae.rn =  1
+    left join ( -- get all portfolios in a string
+      select lpv.loan_id, array_join(array_agg(lpv.title), ', ') as portfolios_100
+        from  loan_portfolio_view lpv
+      left join  portfolio_entity lp on lp.id = lpv.id
+        where lpv.active  = 1 
+        group by 1
+    ) lpv on lpv.loan_id = dpd.entity_id 
+  )
+  -- get most recent day from cuml and check if past due after summing
+  select 
+      cl.day
+      , cl.application_id
+      , cl.loan_id
+    , lse.autopay_enabled
+    , cl.portfolios_100
+      , CASE WHEN COALESCE(cl.cuml_owed_amt, 0) > coalesce(cl.total_paid, 0) then COALESCE(cl.cuml_owed_amt, 0) - coalesce(cl.total_paid, 0) else 0 end as amt_past_due 
+      , cl.contract_date
+    , cl.sub_status
+    , cl.cuml_owed_amt
+      , cl.total_paid
+      , CASE WHEN COALESCE(cl.cuml_owed_amt, 0) > coalesce(cl.total_paid, 0) then 'Past Due' else 'Current' end as status
+    , cdt.last_in_dialer_dt
+    , pem.last_succ_pmt_dt
+      , cl.last_ap_amt
+    , cl.last_ap_apply_date
+    , cl.last_ap_process_ts
+    , cl.freq as last_ap_freq
+    , case when lse.autopay_enabled = 0 THEN NULL ELSE np.amount END as next_ap_amt
+    , case when lse.autopay_enabled = 0 THEN NULL ELSE np.process_datetime END as next_ap_process_ts
+    , case when lse.autopay_enabled = 0 THEN NULL ELSE np.apply_date END as next_ap_apply_dt
+    , case when lse.autopay_enabled = 0 THEN NULL ELSE np.freq END as next_ap_freq
+  from cuml_loan cl
+  left join ( -- find out the max dt each loan was in the dialer
+    SELECT application_id, MAX(uploaded_ts) as last_in_dialer_dt
+    from hive.current.snapcollections__contact_data_table cdt 
+    WHERE cdt.dialer_status IN ('ready','at_dialer')
+    GROUP BY 1
+  ) cdt on cdt.application_id = cl.application_id 
+  left join ( -- next ap details
+    select 
+     lae.loan_id, lae.id, lae.amount_type, lae.amount, lae.apply_date , lae.recurring_frequency AS freq, lae.process_datetime, lae.type, lae.status, row_number() over (partition by lae.loan_id order by lae.id ) as rn
+    from  loan_autopay_entity lae
+    where lae.process_datetime >= current_date 
+      and lae.status IN ('autopay.status.pending','autopay.status.completed')
+  ) np on np.loan_id = cl.loan_id and np.rn=1
+  left join  loan_settings_entity lse on lse.loan_id = cl.loan_id
+  left join (
+    select max(pe.apply_date) as last_succ_pmt_dt, pe.entity_id
+    from  payment_entity pe
+    where pe.reverse_reason IS NULL AND pe.reverse_date IS NULL and pe.nacha_return_code IS NULL
+    GROUP BY 2
+  ) pem on pem.entity_id = cl.loan_id
+  where cl.day = current_date -- - interval '1' day -- get yesterday for all loans
+```
+

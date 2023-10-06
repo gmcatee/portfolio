@@ -3,17 +3,19 @@ title: "Guy McAtee"
 format:
   html:
     page-layout: full
+downloads: [resume_pdf]
 ---
-:::: {.columns}
 
+
+::: columns
 ::: {.column width="45%"}
-
 ## Skills
 
+<div class="skills_list">
 -   Build and maintain ETL processes
 
     -   Presto SQL, Postgre SQL, R, Python, Airflow, Posit Connect (RStudio)
-    
+
 -   Experiment analysis (A/B testing, stats)
 
 -   Prophet model forecasting
@@ -27,6 +29,40 @@ format:
     -   RShiny, Graveler, BS4, ZenDash, Tableau
 
 -   Data storytelling
+</div>
+
+::: {.download_btn}
+```{css}
+#| echo: false
+
+.btn-default,
+.btn-default:hover,
+.btn-default:active {
+  font-size: 20px;
+  color: black;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.btn-default:hover {
+  color: grey;
+  transition: 0.2s;
+}
+```
+
+```{r, echo=FALSE}
+library(downloadthis)
+download_link(
+  link = "https://github.com/gmcatee/portfolio/blob/main/GuyMcAtee_Resume1.pdf",
+  button_label = "Download Resumé",
+  button_type = "default",
+  has_icon = TRUE,
+  icon = "fa fa-save",
+  self_contained = FALSE
+)
+```
+:::
+
 :::
 
 ::: {.column width="5%"}
@@ -34,7 +70,6 @@ format:
 :::
 
 ::: {.column width="50%"}
-
 ## Current Work
 
 ### Business Intelligence Engineer, Snap! Finance
@@ -55,5 +90,4 @@ format:
 
 -   BS Information Systems, Business Intelligence 2016-2020
 :::
-
-::::
+:::

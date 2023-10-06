@@ -1,5 +1,5 @@
 ---
-title: "Prophet Model Forecast Demo"
+title: "Prophet Model Forecast"
 format: 
   html:
     page-layout: full
@@ -32,7 +32,7 @@ format:
   
     plot_data <- forecast_data %>% 
       left_join(
-        actuals_data %>% filter(day < Sys.Date())
+        actuals_data
       ) %>% 
       mutate(
         forecast = round(forecast,0),
@@ -141,21 +141,10 @@ format:
     ) %>% 
     hc_xAxis(
       min = datetime_to_timestamp(
-        floor_date(
-          floor_date(
-            Sys.Date(),
-            'month'
-          ),
-          'week',
-          week_start = 1
-        )
+        as.Date('2023-06-01')
       ),
       max = datetime_to_timestamp(
-        ceiling_date(
-          Sys.Date(), 
-          'week', 
-          week_start = 1
-        )
+        as.Date('2023-06-25')
       )
     ) %>% 
     hc_yAxis_multiples(
@@ -174,7 +163,7 @@ format:
     ) 
 ```
 
-```{r table, echo=FALSE}
+```{r table, echo=FALSE, warning=FALSE, message=FALSE}
   # table
   dt_data <- forecast_data %>% 
     mutate(
