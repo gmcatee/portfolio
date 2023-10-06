@@ -1,5 +1,5 @@
 ---
-title: "Bring Current Rates Demo"
+title: "Bring Current Rates"
 format: 
   html:
     page-layout: full
