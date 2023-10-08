@@ -6,7 +6,7 @@ format:
 ---
 
 ## Project
-> Display rate of recovery for weekly tranches of delinquent accounts over time. 
+> How long does it take us to recover delinquent Leases? Using a data source that tracks delinquency events (timestamps for delinquncy_ts and recovered_ts) I created a heatmap using 'reactable' that shows the rate of recovery in weekly tranches. Most important time is Day 0 ("How many cured the same day they went delinquent?"); in this example about 80% of New Delinquencies are recovered after 9 weeks. Other drilldowns of this data help managers identifty issues in the effort to bring leases back on schedule.
 
 ```{r get data, include=FALSE}
 library(dplyr)
