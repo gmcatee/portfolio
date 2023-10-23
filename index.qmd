@@ -14,7 +14,7 @@ downloads: [resume_pdf]
 <div class="skills_list">
 -   Build and maintain ETL processes
 
-    -   Presto SQL, Postgre SQL, R, Python, Airflow, Posit Connect (RStudio)
+    -   Presto SQL, PostgreSQL, R, Python, Airflow, Posit Connect (RStudio)
 
 -   Experiment analysis (A/B testing, stats)
 
@@ -78,7 +78,7 @@ download_link(
 
 -   Manage dashboards that use R Shiny and are hosted on the company's server, **Posit Connect**
 
--   Clean and prepare data from various sources (AWS S3, Presto/Postgre databases)
+-   Clean and prepare data from various sources (AWS S3, Presto/Postgres databases)
 
 -   Automate reports (Anomaly detection, daily scripts, PowerPoints)
 

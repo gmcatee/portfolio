@@ -6,7 +6,7 @@ website:
   title: "About"
   sidebar:
     style: "floating"
-    logo: profile.jpeg
+    logo: profile2.jpeg
     contents:
       - index.qmd
       - section: "Work Samples"
@@ -14,6 +14,7 @@ website:
           - sql_demo.qmd
           - bring_current.qmd
           - prophet_model.qmd
+          - experiment_analysis.qmd
 
 format: 
   html: 
