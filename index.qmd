@@ -53,7 +53,7 @@ downloads: [resume_pdf]
 ```{r, echo=FALSE}
 library(downloadthis)
 download_link(
-  link = "https://github.com/gmcatee/portfolio/blob/main/GuyMcAtee_Resume1.pdf",
+  link = "https://github.com/gmcatee/portfolio/blob/main/GuyMcAtee_Resume.pdf",
   button_label = "Download Resumé",
   button_type = "default",
   has_icon = TRUE,

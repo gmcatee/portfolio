@@ -6,7 +6,7 @@ website:
   title: "About"
   sidebar:
     style: "floating"
-    logo: profile2.jpeg
+    logo: profile2.jpg
     contents:
       - index.qmd
       - section: "Work Samples"
