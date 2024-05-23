@@ -5,7 +5,10 @@ format:
     page-layout: full
 downloads: [resume_pdf]
 ---
+gmact16@gmail.com <br>
+Pleasant Grove, UT
 
+Code for this website: <https://github.com/gmcatee/portfolio/tree/main>
 
 ::: columns
 ::: {.column width="45%"}
@@ -70,19 +73,21 @@ download_link(
 :::
 
 ::: {.column width="50%"}
-## Current Work
+## Recent Work
 
 ### Senior Business Intelligence Engineer, Limble CMMS
 
--   Building data solutions for the Finance team (GTM framework, Revenue Cohort Analysis etc.)
+-   Building data solutions for Finance (GTM framework, Revenue Cohort Analysis etc.)
 
 -   Manage various data models in Snowflake via DBT
 
+-   Troubleshoot Five Tran data connections using custom API connectors
+
 ### Business Intelligence Engineer, Snap! Finance
 
--   My focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing... everyday!
+-   Data migration of a Loan Management System
 
--   Manage dashboards that use R Shiny and are hosted on the company's server, **Posit Connect**
+-   Manage R Shiny dashboards hosted on the company's Posit Connect server
 
 -   Clean and prepare data from various sources (AWS S3, Presto/Postgres databases)
 

@@ -4,14 +4,14 @@
     "href": "index.html#current-work",
     "title": "Guy McAtee",
     "section": "",
-    "text": "My focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that use R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgres databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)\nCommunicate portfolio health to managers and C-Suite"
+    "text": "Building data solutions for the Finance team (GTM framework, Revenue Cohort Analysis etc.)\nManage various data models in Snowflake via DBT\n\n\n\n\n\nMy focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that use R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgres databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)\nCommunicate portfolio health to managers and C-Suite"
   },
   {
     "objectID": "index.html#education",
     "href": "index.html#education",
     "title": "Guy McAtee",
-    "section": "",
-    "text": "BS Information Systems, Business Intelligence 2016-2020"
+    "section": "Education",
+    "text": "Education\n\nUtah Valley University\n\nBS Information Systems, Business Intelligence 2016-2020"
   },
   {
     "objectID": "index.html#what-can-i-do-for-you",
@@ -25,7 +25,7 @@
     "href": "index.html",
     "title": "Guy McAtee",
     "section": "",
-    "text": "Build and maintain ETL processes\n\nPresto SQL, PostgreSQL, R, Python, Airflow, Posit Connect (RStudio)\n\nExperiment analysis (A/B testing, stats)\nProphet model forecasting\nBuild interactive and compelling visuals\n\nHighcharts, Plotly, GGPlot etc.\n\nBuild interactive Dashboards\n\nRShiny, Graveler, BS4, ZenDash, Tableau\n\nData storytelling\n\n\n\n\n\n\n\n\n\n Download Resumé\n\n\n\n\n\n\n\n\n\n\n\n\n\nMy focus is on the Collections Department of the business, although lately I am assisting with the data migration of a LMS (Loan Management System). Saving money, making money, keeping the money flowing… everyday!\nManage dashboards that use R Shiny and are hosted on the company’s server, Posit Connect\nClean and prepare data from various sources (AWS S3, Presto/Postgres databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)\nCommunicate portfolio health to managers and C-Suite\n\n\n\n\n\n\n\n\nBS Information Systems, Business Intelligence 2016-2020"
+    "text": "gmact16@gmail.com  Pleasant Grove, UT\nCode for this website: https://github.com/gmcatee/portfolio/tree/main"
   },
   {
     "objectID": "bring_current.html",
@@ -136,8 +136,8 @@
     "objectID": "index.html#skills",
     "href": "index.html#skills",
     "title": "Guy McAtee",
-    "section": "",
-    "text": "Build and maintain ETL processes\n\nPresto SQL, PostgreSQL, R, Python, Airflow, Posit Connect (RStudio)\n\nExperiment analysis (A/B testing, stats)\nProphet model forecasting\nBuild interactive and compelling visuals\n\nHighcharts, Plotly, GGPlot etc.\n\nBuild interactive Dashboards\n\nRShiny, Graveler, BS4, ZenDash, Tableau\n\nData storytelling\n\n\n\n\n\n\n\n\n\n Download Resumé"
+    "section": "Skills",
+    "text": "Skills\n\n\nBuild and maintain ETL processes\n\nSnowflake, Presto SQL, PostgreSQL, DBT, R, Python, Airflow, Posit Connect (RStudio)\n\nExperiment analysis (A/B testing, stats)\nProphet model forecasting\nBuild interactive and compelling visuals\n\nHighcharts, Plotly, GGPlot etc.\n\nBuild interactive Dashboards\n\nTableau, RShiny, Graveler, BS4, ZenDash\n\nData storytelling\n\n\n\n\n\n\n\n\n\n Download Resumé"
   },
   {
     "objectID": "bring_current.html#project",
@@ -166,5 +166,12 @@
     "title": "Expiriment Analysis (coming soon)",
     "section": "Charge Off Timing Experiment",
     "text": "Charge Off Timing Experiment"
+  },
+  {
+    "objectID": "index.html#recent-work",
+    "href": "index.html#recent-work",
+    "title": "Guy McAtee",
+    "section": "Recent Work",
+    "text": "Recent Work\n\nSenior Business Intelligence Engineer, Limble CMMS\n\nBuilding data solutions for Finance (GTM framework, Revenue Cohort Analysis etc.)\nManage various data models in Snowflake via DBT\nTroubleshoot Five Tran data connections using custom API connectors\n\n\n\nBusiness Intelligence Engineer, Snap! Finance\n\nData migration of a Loan Management System\nManage R Shiny dashboards hosted on the company’s Posit Connect server\nClean and prepare data from various sources (AWS S3, Presto/Postgres databases)\nAutomate reports (Anomaly detection, daily scripts, PowerPoints)\nCommunicate portfolio health to managers and C-Suite"
   }
 ]
