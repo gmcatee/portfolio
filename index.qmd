@@ -14,7 +14,7 @@ downloads: [resume_pdf]
 <div class="skills_list">
 -   Build and maintain ETL processes
 
-    -   Presto SQL, PostgreSQL, R, Python, Airflow, Posit Connect (RStudio)
+    -   Snowflake, Presto SQL, PostgreSQL, DBT, R, Python, Airflow, Posit Connect (RStudio)
 
 -   Experiment analysis (A/B testing, stats)
 
@@ -26,7 +26,7 @@ downloads: [resume_pdf]
 
 -   Build interactive Dashboards
 
-    -   RShiny, Graveler, BS4, ZenDash, Tableau
+    -   Tableau, RShiny, Graveler, BS4, ZenDash
 
 -   Data storytelling
 </div>
@@ -71,6 +71,12 @@ download_link(
 
 ::: {.column width="50%"}
 ## Current Work
+
+### Senior Business Intelligence Engineer, Limble CMMS
+
+-   Building data solutions for the Finance team (GTM framework, Revenue Cohort Analysis etc.)
+
+-   Manage various data models in Snowflake via DBT
 
 ### Business Intelligence Engineer, Snap! Finance
 
