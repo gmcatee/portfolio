@@ -1,0 +1,570 @@
+---
+title: "Data Models"
+format: 
+  html:
+    page-layout: full
+---
+
+## Finance Monthly Recurring Revenue
+> Stakeholders request: "Recreate the MRR report by customer_id coming from the Revenue Recognition Software (Saas Optics)."
+> The Data Warehouse Team receives data from the Fivetran connector for Saas Optics. 
+
+1. **Validate the data coming from fivetran**
+    i) count of transactions in our RAW tables was < count of transactions in the UI
+    ii) Create separate API connection to confirm we were missing transactions
+    iii) Diagnose why we were not receiving all transactions from fivetran
+    iv) Work with finance team and DWH team to get all data
+    v) Learn that fivetran only detects deleted transactions on a historical resync
+    vi) Create custom job to historically resync each week to catch transactions
+2. **Research MRR calculation using Saas Optics documentation and Customer Support**
+    i) Recreate the logic in SQL DBT model to run every morning
+    ii) Implement tests for dupes, nulls, etc.
+3. **Create various visualizations using the new table**
+
+## SQL Query returning one row for each customer_id each month 
+
+```{r, echo=TRUE, eval=FALSE}
+with transactions_with_mrr as ( -- get all transactions with MRR
+
+  select
+     t.saas_optics_transaction_id
+    , t.order_date
+    , t.transaction_start_date
+    , t.end_date
+    , t.saas_optics_contract_id
+	, case 
+        when datediff('month', t.transaction_start_date, t.end_date) = 0 and last_day(t.end_date) != date(t.end_date) then false 
+        else true 
+      end as mrr_eligible
+      
+	from  base_saas_optics_transaction  t
+	
+	where 
+        case  --this logic is used due to the fact mrr is calculated monthly by the last day of the month as the monthly "cohort"
+            when datediff('month', t.transaction_start_date, t.end_date) = 0 and last_day(t.end_date) != date(t.end_date) then false 
+            else true 
+        end = true
+                
+    and t.home_normalized_amount != 0
+    
+)
+, min_txn as ( -- get min txn dates for each customer
+
+    select 
+        c.saas_optics_customer_number
+        , min(date(t.transaction_start_date)) as customer_start_date
+    from base_saas_optics_customer c
+
+    left join base_saas_optics_contract ct 
+        on c.saas_optics_customer_id = ct.saas_optics_customer_id
+    
+    left join transactions_with_mrr t 
+        on t.saas_optics_contract_id = ct.saas_optics_contract_id
+    
+    {{ dbt_utils.group_by(n=1) }}
+
+)
+
+
+, min_txn_parent as ( -- for only parents
+
+	  select 
+        p.saas_optics_customer_number as parent_number
+        , p.customer_name as parent_name
+        , p.saas_optics_customer_id as parent_id
+        , min(date(t.transaction_start_date)) as parent_start_date
+    
+    from base_saas_optics_customer c
+
+    join base_saas_optics_customer p 
+        on p.saas_optics_customer_id = c.parent
+    
+    left join base_saas_optics_contract ct 
+        on c.saas_optics_customer_id = ct.saas_optics_customer_id
+
+    left join transactions_with_mrr t 
+        on t.saas_optics_contract_id = ct.saas_optics_contract_id 
+
+    where c.parent is not null
+
+    {{ dbt_utils.group_by(n=3) }}
+)
+
+, txn_mrr as ( -- 
+
+	select  
+		distinct  
+		c.saas_optics_customer_number
+    , c.customer_id
+		, c.customer_name
+		, mt.customer_start_date
+    , coalesce(p.segment, c.segment) as segment -- prefer parent segment
+		, c.parent as customer_parent
+		, p.saas_optics_customer_id as parent_id
+		, coalesce(p.customer_name, '') as parent_name
+		, p.saas_optics_customer_number as parent_number
+		, coalesce(mtp.parent_start_date, psd.parent_start_date) as parent_start_date -- use parents for parent and parents for children
+		, d.last_day_of_month
+		, d2.last_day_of_month as same_month
+    , t.transaction_number as txn_number
+		, t.order_date
+		, t.transaction_start_date
+		, t.end_date
+		, datediff('month', t.transaction_start_date, t.end_date) as month_diff
+		, dateadd(day, -1, date_trunc('month', date(t.end_date)))
+		, t.home_normalized_amount as mrr
+		, mtp.parent_number is not null as parent
+		, c.parent is not null as child
+		, case 
+        when c.parent is null and mtp.parent_number is null then true 
+        else false 
+      end as solo_company
+
+	from base_saas_optics_customer c
+
+	left join base_saas_optics_customer p 
+        on p.saas_optics_customer_id = c.parent
+
+	left join min_txn_parent mtp 
+        on mtp.parent_number = c.saas_optics_customer_number
+
+  left join min_txn_parent psd -- join again to get childrens parent start dates
+      on psd.parent_id = c.parent
+
+	left join min_txn mt 
+        on mt.saas_optics_customer_number = c.saas_optics_customer_number
+
+  left join base_saas_optics_contract ct 
+      on c.saas_optics_customer_id = ct.saas_optics_customer_id
+
+  left join base_saas_optics_transaction t
+      on t.saas_optics_contract_id = ct.saas_optics_contract_id
+
+	left join dim_date d 
+		on datediff('month', t.transaction_start_date, t.end_date) > 0 -- more than same month
+		and d.last_day_of_month between date_trunc('month', date(t.transaction_start_date)) 
+		and date(t.end_date)
+
+	left join dim_date d2
+		on datediff('month', t.transaction_start_date, t.end_date) = 0 -- same month and ends on last day of the month
+		and d2.last_day_of_month = date(t.end_date)
+
+	where mt.customer_start_date is not null
+
+) -- below gets the totals for all children and solo customers
+
+, co_agg as (
+    select 
+        tm.parent_name
+        , coalesce(tm.parent_number, '') as parent_number
+        , coalesce(tm.parent_start_date, tm.customer_start_date) as parent_start_date
+        , tm.saas_optics_customer_number
+        , tm.customer_id
+        , tm.customer_name
+        , tm.customer_start_date
+        , coalesce(tm.last_day_of_month, tm.same_month) AS last_day_of_month
+        , tm.parent
+        , tm.child
+        , tm.solo_company
+        , sum(tm.mrr) as mrr
+
+    from txn_mrr tm
+
+    where tm.parent = 'false'
+        
+    {{ dbt_utils.group_by(n=15) }}
+) 
+-- get aggregation for all parents
+
+, parent_agg as (
+    select
+        mtp.parent_name
+        , mtp.parent_number
+        , mtp.parent_start_date
+        , mtp.parent_name as customer_name
+        , mtp.parent_number as saas_optics_customer_number
+        , null as customer_id -- no cogs id for parents
+        , mtp.parent_start_date as customer_start_date
+        , ca.last_day_of_month
+        , true as parent
+        , false as child
+        , false as solo_company -- create list of all the childrens segments
+        , sum(mrr) as mrr
+
+    from co_agg ca
+
+    join min_txn_parent mtp 
+        on ca.parent_number = mtp.parent_number
+        and ca.last_day_of_month is not null
+
+    {{ dbt_utils.group_by(n=12) }}
+)
+
+-- cte for cleaning up parent segment
+, parent_segment as (
+    select 
+        pa.parent_name
+        , pa.parent_number
+        , pa.parent_start_date
+        , pa.customer_name
+        , pa.saas_optics_customer_number
+        , pa.customer_id -- no cogs id for parents
+        , pa.customer_start_date
+        , pa.last_day_of_month
+        , pa.parent
+        , pa.child
+        , pa.solo_company
+        , pa.mrr
+
+    from parent_agg pa 
+)
+
+select 
+    ca.customer_name
+    , ca.saas_optics_customer_number
+    , ca.customer_id
+    , ca.parent_start_date
+    , ca.customer_start_date
+    , ca.last_day_of_month
+    , ca.parent as is_parent
+    , ca.child as is_child
+    , ca.solo_company
+    , ca.mrr
+    , datediff('month', date_trunc('month', ca.customer_start_date), ca.last_day_of_month) as month_number
+
+from co_agg ca
+
+where ca.last_day_of_month <= date_trunc('month', current_date) + interval '1 month' - interval '1 day'
+    and ca.last_day_of_month >= date_trunc('month', customer_start_date)
+
+union
+
+select 
+    pa.customer_name
+    , pa.saas_optics_customer_number
+    , pa.customer_id
+    , pa.parent_start_date
+    , pa.customer_start_date
+    , pa.last_day_of_month
+    , pa.parent as is_parent
+    , pa.child as is_child
+    , pa.solo_company
+    , pa.mrr
+    , datediff('month', date_trunc('month', pa.customer_start_date), pa.last_day_of_month) as month_number
+
+from parent_segment pa 
+
+where pa.last_day_of_month <= date_trunc('month', current_date) + interval '1 month' - interval '1 day'
+    and pa.last_day_of_month >= date_trunc('month', customer_start_date)
+```
+
+### Pt 2 was to build a Month-Month changes mart using the above fact_finance_mrr table 
+> How much MRR did we see each month in the New, Upsell, Downsell, Churn categories?
+
+```{r buckets, echo=TRUE, eval=FALSE}
+with all_customers as (
+	select 
+    	distinct customer_name
+    	, saas_optics_customer_number
+      , customer_start_date -- used for getting necessary rows later
+      , segment
+
+	from fact_finance_mrr f
+
+	where f.is_child = false -- reports using this data are rolled up to the 'parent' level
+)
+, all_cust_all_months as ( -- r all customers and months bc not all customers exist each month
+	select 
+  		distinct dd.first_day_of_month
+  		, a.saas_optics_customer_number
+  		, a.customer_name
+      , a.customer_start_date
+      , a.segment
+      , a.customer_id
+
+	from dim_date  dd
+
+	cross join all_customers a
+
+	where dd.first_day_of_month between '2016-10-01' and date_trunc('month', current_date)
+)
+, agg_mrr as ( -- aggregate to each customer (this is needed for parent customers with multiple segments)
+	select 
+		a.saas_optics_customer_number
+    , a.customer_id
+		, a.customer_name
+    , a.customer_start_date
+		, a.first_day_of_month
+		, a.segment
+		, to_number(coalesce(sum(f.mrr),0)) as mrr
+
+	from all_cust_all_months a
+
+	left join fact_finance_mrr f
+		on a.saas_optics_customer_number = f.saas_optics_customer_number
+		and a.first_day_of_month = date_trunc('month', f.last_day_of_month)
+
+	group by 1,2,3,4,5,6
+)
+, min_new_mrr as ( -- get min and max month that eacah customer has MRR
+	select 
+		saas_optics_customer_number
+		, min(first_day_of_month) as first_mrr_month
+		, max(first_day_of_month) as last_mrr_month
+
+	from agg_mrr
+
+	where round(mrr,0) != 0 -- would need to change this to give higher max date for those with < $1 MRR
+
+	group by 1
+)
+-- create buckets for saas optics mrr
+select 
+    a.saas_optics_customer_number
+    , a.customer_id
+    , a.customer_name
+    , a.customer_start_date
+    , a.segment
+    , m.first_mrr_month
+    , a.first_day_of_month
+    , coalesce(lag(a.mrr) over (partition by a.saas_optics_customer_number order by a.first_day_of_month), 0) as beginning_mrr_saas_optics
+    , a.mrr as ending_mrr_saas_optics
+    , case 
+        when a.first_day_of_month = m.first_mrr_month and a.mrr > 0 and (lag(a.mrr) over (partition by a.saas_optics_customer_number order by a.first_day_of_month) is null
+            or lag(a.mrr) over (partition by a.saas_optics_customer_number order by a.first_day_of_month) = 0)
+        then a.mrr -- (current period)
+        else 0 
+    end as new_mrr_saas_optics
+    , case 
+        when a.first_day_of_month > m.first_mrr_month and a.first_day_of_month != m.last_mrr_month + interval '1 month' 
+            and coalesce(a.mrr,0) > lag(coalesce(a.mrr,0)) over (partition by a.saas_optics_customer_number order by a.first_day_of_month)
+        then coalesce(a.mrr,0) - lag(coalesce(a.mrr,0)) over (partition by a.saas_optics_customer_number order by a.first_day_of_month) -- (current period - prior)
+        else 0
+    end as upsell_mrr_saas_optics
+    , case 
+        when a.first_day_of_month != m.last_mrr_month + interval '1 month' 
+            and coalesce(a.mrr,0) < lag(coalesce(a.mrr,0)) over (partition by a.saas_optics_customer_number order by a.first_day_of_month) 
+        then (lag(coalesce(a.mrr,0)) over (partition by a.saas_optics_customer_number order by a.first_day_of_month) - coalesce(a.mrr,0)) * -1 -- (prior - current period)
+        else 0
+    end as downsell_mrr_saas_optics
+    , case 
+        when a.first_day_of_month = m.last_mrr_month + interval '1 month' 
+            and (a.mrr is null or a.mrr = 0 or a.mrr<0)
+        then (lag(a.mrr) over (partition by a.saas_optics_customer_number order by a.first_day_of_month)) * -1 -- (prior period)
+        else 0
+    end as churn_mrr_saas_optics
+
+from agg_mrr a
+
+left join min_new_mrr m 
+    on a.saas_optics_customer_number = m.saas_optics_customer_number
+
+where a.first_day_of_month >= m.first_mrr_month 
+and a.first_day_of_month <= date_trunc('month', current_date)
+```
+
+## NPS Scores
+> What is our trend in NPS Scores over time? Analysis focused on role of users
+
+```{r nps, echo=TRUE, eval=FALSE}
+select 
+    response_uuid
+    , ch.email
+    , co.company_name
+    , 'super user' as role
+    , 'g_sheet_super_user' as source
+    , co.primary_industry 
+    , u.score
+    , case 
+        when score < 7 then u.improvement_analysis
+        when score between 7 and 8 then concat(u.positive_analysis,' ', u.improvement_analysis)
+        else u.positive_analysis
+      end as score_feedback
+    , date(convert_timezone( 'UTC', 'America/Denver' , u.nps_utc_datetime )) as collected_date
+    , null as user_key --current join is only on email, please update once move to salesforce is completed
+    , co.customer_id
+
+from stg_g_sheet_nps_super_user_scores u
+
+left join stg_intercom_contact_history ch 
+    on ch.contact_history_id = trim(regexp_substr(u.intercom_profile, '/users/(.*)', 1, 1, 'e'))
+
+left join base_hubspot_contact c 
+    on c.email  = ch.email
+
+left join base_hubspot_company co 
+    on c.hubspot_company_id = co.hubspot_company_id
+
+where ch.email is not null 
+
+union
+
+select 
+    u.response_uuid
+    , ch.email
+    , co.company_name
+    , 'tech' as role
+    , 'g_sheet_tech' as source
+    , co.primary_industry 
+    , u.score
+    , case 
+        when score < 7 then u.improvement_analysis
+        when score between 7 and 8 then concat(u.positive_analysis,' ', u.improvement_analysis)
+        else u.positive_analysis
+      end as score_feedback
+    , date(convert_timezone( 'UTC', 'America/Denver' , u.nps_utc_datetime )) as collected_date
+    , null as user_key --current join is only on email
+    , co.customer_id
+
+from stg_g_sheet_nps_tech_scores u
+
+left join stg_intercom_contact_history ch 
+    on ch.contact_history_id = trim(regexp_substr(u.intercom_profile, '/users/(.*)', 1, 1, 'e'))
+
+left join base_hubspot_contact c 
+    on c.email  = ch.email
+
+left join base_hubspot_company co 
+    on c.hubspot_company_id = co.hubspot_company_id
+
+where ch.email is not null 
+
+union
+
+select
+    response_id
+    , c.user_email
+    , c.company_name
+    , c.user_type
+    , 'beamer' as source
+    , salesforce_account.account_industry 
+    , score
+    , feedback
+    , date(c.response_date) as collected_date
+    , md5(concat(c.user_id, ' ', c.customer_id)) as user_key
+    , account.customer_id
+
+from stg_nps_responses c
+
+left join base_salesforce_account account
+    on account.customer_id = c.customer_id
+
+left join base_salesforce_account salesforce_account 
+    on salesforce_account.salesforce_account_id = account.salesforce_account_id
+    
+where c.score is not null 
+
+```
+
+## Finance General Ledger Expenses
+
+> Stakeholders need to know expenses incurred each day
+
+### SQL Query returning expenses from both ERPs
+```{r exp, echo=TRUE, eval=FALSE}
+with xero_general_ledger_expenses as ( 
+
+	select 
+		gl.journal_id
+		, gl.source_id
+		, gl.journal_description as transaction_memo
+		, gl.journal_date as transaction_date
+		, gl.account_code as account_id
+		, gl.account_name
+		, gl.contact_name as vendor_name
+		, initcap(lower(gl.account_type)) as account_type_name -- to match title case of netsuite
+		, jl.option as cost_group
+		, jl2.option as department_name 
+		, sum(gl.net_amount) as transaction_amount 	-- sum by source id first
+
+	from base_xero_general_ledger as gl
+
+	left join base_xero_journal_line_has_tracking_category as jl 
+		on gl.journal_line_id = jl.journal_line_id
+		and jl.tracking_category_id = '5d9db1ad-03c9-44bf-997f-a89b48c7d86d'	-- cost groups
+
+	left join base_xero_journal_line_has_tracking_category as jl2 
+		on gl.journal_line_id = jl2.journal_line_id
+		and jl2.tracking_category_id = 'c43eb442-1bcd-4771-80b8-0420de976422'	-- departments
+
+	where gl.journal_date <= '2024-07-31' -- filter for the timerange using XERO as the ERP
+		and gl.account_type = 'EXPENSE' -- show only expenses
+		and gl.account_class = 'EXPENSE'
+
+	group by all
+
+)
+
+, xero_expenses_aggregate as ( 
+
+	select 
+  		transaction_date
+  		, transaction_memo
+  		, account_id
+  		, account_name
+  		, account_type_name
+  		, department_name
+  		, vendor_name
+  		, sum(transaction_amount) as transaction_amount
+
+	from xero_general_ledger_expenses
+
+	group by all
+	
+)
+
+, netsuite_expenses_aggregate as (
+
+    select
+        td.transaction_date::date as transaction_date
+		    , td.transaction_memo
+        , a.account_search_display_name_copy as account_name
+        , td.account_id 
+        , td.account_type_name 
+        , regexp_substr(td.department_name , '[^-]+$') as department_name -- account id shown in the name and regex it out to match xero better
+		    , td.vendor_name
+        , sum(td.transaction_amount) as transaction_amount
+
+    from base_netsuite_transaction_details as td 
+
+    left join base_netsuite_account as a -- to get cleaner name for each account
+    	on a.netsuite_account_id = td.account_id 
+
+    where td.account_type_name in ('Expense', 'Deferred Expense')
+    	and td.transaction_date::date >= '2024-08-01' -- switched to Netsuite as ERP on 8/1/24
+
+    group by all
+
+)
+
+select 
+    {{ dbt_utils.generate_surrogate_key(['transaction_date', 'transaction_memo', 'account_id', 'vendor_name', 'department_name']) }} as general_ledger_expense_key
+  	, transaction_date
+  	, transaction_memo
+  	, account_name
+  	, account_id
+  	, account_type_name
+  	, department_name
+  	, vendor_name
+  	, transaction_amount
+
+from xero_expenses_aggregate
+
+union
+
+select
+    {{ dbt_utils.generate_surrogate_key(['transaction_date', 'transaction_memo', 'vendor_name', 'account_id', 'department_name']) }} as general_ledger_expense_key
+    , transaction_date
+  	, transaction_memo
+  	, account_name
+  	, account_id
+  	, account_type_name
+  	, department_name
+  	, vendor_name
+  	, transaction_amount
+
+from netsuite_expenses_aggregate
+```
+
+
+
