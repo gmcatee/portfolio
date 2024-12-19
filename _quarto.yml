@@ -12,6 +12,7 @@ website:
       - section: "Work Samples"
         contents:
           - data_models.qmd
+          - python_scripts.qmd
           - sql_demo.qmd
           - bring_current.qmd
           - prophet_model.qmd

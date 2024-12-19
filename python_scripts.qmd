@@ -1,0 +1,211 @@
+---
+title: "Python Data Scripts"
+format: 
+  html:
+    page-layout: full
+---
+
+## Sync Revenue Recognition data with Salesforce (SFDC)
+### Save the query and API URL + Token 
+```{python, echo=TRUE, eval=FALSE, collapse=TRUE, python.reticulate = FALSE}
+import os
+import snowflake.connector
+import requests
+
+#This script compares customer information to Salesforce, and then writes the correct information into
+#the saas optics API
+
+#The query below compares Chargify data to SFDC, in order to make changes to the incorrect Customer
+#segments, industries and COGS ID's. It then compares back to Saas Optics to check for inconsitencies.
+query = f'''
+select c.limble_customer_id as text_field1
+, c.chargify_customer_id 
+, a.salesforce_account_id
+, a.segment
+, a.industry
+, cu.limble_customer_id
+, cu.customer_name
+, cu.saas_optics_customer_id
+from analytics.base.base_chargify_customer c
+left join analytics.base.base_salesforce_limble_account la 
+	on la.limble_customer_id = c.limble_customer_id 
+left join analytics.base.base_salesforce_account a
+	on a.salesforce_account_id = la.salesforce_account_id 
+inner join analytics.base.base_saas_optics_customer cu -- do not return when customer not found in saas optics
+	on cu.saas_optics_customer_number = c.chargify_customer_id 
+where (cu.is_active or la.customer_status in ('active','past_due','not_paid'))
+-- look for mismatches or where the saas optics field is null
+and ((cu.limble_customer_id != c.limble_customer_id or cu.limble_customer_id is null)
+or (cu.segment != a.segment or cu.segment is null)
+or (cu.industry != a.industry or cu.industry is null))
+and a.salesforce_account_id is not null -- do not update if there is no sfdc account found
+and ((cu.industry is null and a.industry is not null) or (cu.segment is null and a.segment is not null))  -- update when sfdc account is not null'''
+
+api_url = os.environ.get('api_url')
+rev_rec_write_token = os.environ.get('rev_rec_write_token')
+
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Token {rev_rec_write_token}"
+}
+```
+
+### Method for retrieving the results of the "query"
+```{python, eval=FALSE, echo=TRUE, collapse=TRUE, python.reticulate = FALSE}
+def get_snowflake_data(query):
+    """
+    Fetch data from Snowflake based on a given query.
+    
+    Parameters:
+        query (str): The SQL query to execute.
+        
+    Returns:
+        list: List of dictionaries containing query results.
+    """
+    # Establish connection to Snowflake
+    conn = snowflake.connector.connect(
+        user = os.environ.get('snowflake_user'),
+        password = os.environ.get('snowflake_password'),
+        account = 'bingbong',
+        warehouse = 'transforming',
+        database = 'l_db',
+        schema = 'base'
+    )
+    
+    # Execute query
+    cursor = conn.cursor()
+    # Query for pulling the data from sfdc snowflake
+    cursor.execute(query)
+    
+    # Fetch results
+    results = cursor.fetchall()
+    columns = [col[0] for col in cursor.description]
+    
+    # Close connection
+    cursor.close()
+    conn.close()
+    
+    # Convert results to list of dictionaries
+    data = [dict(zip(columns, row)) for row in results]
+    return data
+```
+
+### Method for updating the customer info using the api url endpoint
+```{python, eval=FALSE, echo=TRUE, collapse=TRUE, python.reticulate = FALSE}
+def partial_update_customer(api_url, saas_optics_customer_id, headers, name, **kwargs):
+    """
+    Updates a specific customer resource using a PATCH request.
+    Parameters:
+        api_url (str): The base URL of the API.
+        resource_id (str): The ID of the customer resource to update.
+        headers (dict): The headers to include in the request (e.g., for authentication).
+        name (str): The name of the customer (required).
+        kwargs: Other fields to update (key-value pairs).
+    Returns:
+        dict: The response from the API if successful.
+        None: If the update fails.
+    """
+    # Ensure the 'name' field is included in the data
+    data = {'name': name}
+
+    # Add any other fields to update
+    data.update(kwargs)
+
+    # Make the PATCH request
+    response = requests.patch(f"{api_url}/{saas_optics_customer_id}/", headers=headers, json=data)
+    # Log the response for debugging
+    print(f"Status Code for ID {saas_optics_customer_id}: {response.status_code}")
+    print(f"Response Content for ID {saas_optics_customer_id}: {response.content.decode('utf-8')}")
+    # Check the response
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print("Failed to update:", response.status_code, response.text)
+        return None
+```
+
+### Method for updating customers using the data from snowflake
+```{python, eval=FALSE, echo=TRUE, collapse=TRUE, python.reticulate = FALSE}
+def update_customers_from_snowflake(api_url, headers, query):
+    """
+    Fetch customer data from Snowflake and update each customer using the API.
+    Parameters:
+        api_url (str): The base URL of the API.
+        headers (dict): The headers to include in the request (e.g., for authentication).
+        query (str): The SQL query to fetch customer data from Snowflake.
+    """
+    # Fetch data from Snowflake
+    customer_data = get_snowflake_data(query)
+    print(customer_data)
+    # Iterate through each customer record and update via API
+    for customer in customer_data:
+        print(customer)
+        saas_optics_customer_id = customer['SAAS_OPTICS_CUSTOMER_ID']
+        name = customer['CUSTOMER_NAME']
+        additional_fields = {key.lower(): value for key, value in customer.items() if key not in ['SAAS_OPTICS_CUSTOMER_ID', 'CUSTOMER_NAME']}
+        print(additional_fields)
+        response = partial_update_customer(api_url, saas_optics_customer_id, headers, name, **additional_fields)
+        if response:
+            print("Update successful for ID:", saas_optics_customer_id)
+        else:
+            print("Update failed for ID:", saas_optics_customer_id)
+
+# Run the method and see the results printed out
+# update_customers_from_snowflake(api_url, headers, query)
+```
+
+## YAML file used in GitHub Actions
+```{r, eval=FALSE, echo=TRUE, collapse=TRUE}
+'name: saas_optics_daily_update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 11 * * *'
+
+jobs:
+  build:
+    environment: snowflake_python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '3.8'
+
+      - name: install requirements
+        run: pip install -q -r requirements.txt
+
+      - name: Run Python script
+        env:
+            snowflake_user: ${{ secrets.SNOWFLAKE_USER }}
+            snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+            api_url: ${{ secrets.SAAS_OPTICS_WRITE_API }}
+            saas_optics_write_token: ${{ secrets.SAAS_OPTICS_WRITE_TOKEN }}
+        run: |
+            python3 -u python/saas_optics_customer_update.py
+
+      - name: Post to a Slack channel_success
+        if: ${{ success() }}
+        id: slack_success
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'C062M0PPZDZ'
+          slack-message: ":white_check_mark:  Job saas_optics_daily_update result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Post to a Slack channel_failure
+        if: ${{ failure() }}
+        id: slack_failure
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'C062M0PPZDZ'
+          slack-message: ":red-light-blinker: <!subteam^S06FP8WBJRH|@dwh-team> Job saas_optics_daily_update result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          '
+```
