@@ -15,23 +15,21 @@ Code for this website: <https://github.com/gmcatee/portfolio/tree/main>
 ## Skills
 
 <div class="skills_list">
--   Build and maintain ETL processes
+-   GitHub actions & GitLab pipelines for CI/CD
 
-    -   Snowflake, Presto SQL, PostgreSQL, DBT, R, Python, Airflow, Posit Connect (RStudio)
+-   AWS & DynamoDB
 
--   Experiment analysis (A/B testing, stats)
+-   SQL (Snowflake, MySQL, Posgres, Presto)
 
--   Prophet model forecasting
+-   Datawarehouse management using dbt Core and Python
 
--   Build interactive and compelling visuals
-
-    -   Highcharts, Plotly, GGPlot etc.
+-   A/B testing, forecasting, stats
 
 -   Build interactive Dashboards
 
     -   Tableau, RShiny, Graveler, BS4, ZenDash
 
--   Data storytelling
+-   Data storytelling and clear communication
 </div>
 
 ::: {.download_btn}
@@ -74,6 +72,16 @@ download_link(
 
 ::: {.column width="50%"}
 ## Recent Work
+
+### Analytics Engineer, Sunbound
+
+-   One-man team for end to end analytics
+
+-   Managing a Kimball Method based dbt Core project orchestrated w/ GitLab CI/CD pipelines
+
+-   Managing Snowflake and the growing demand for Claude (LLM) interactions with data
+
+-   Building visualizations in Tableau for stakeholders throughout the business
 
 ### Senior Business Intelligence Engineer, Limble CMMS
 
